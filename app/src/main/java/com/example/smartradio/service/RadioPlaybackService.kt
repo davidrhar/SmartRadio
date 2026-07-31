@@ -18,6 +18,7 @@ import com.example.smartradio.data.StationRepository
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import java.util.concurrent.Executors
 
@@ -146,11 +147,12 @@ class RadioPlaybackService : MediaSessionService() {
     override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaSession? = mediaSession
 
     override fun onDestroy() {
+        serviceScope.cancel()
         mediaSession?.run {
-            player.release()
             release()
             mediaSession = null
         }
+        player.release()
         classifier.close()
         classifierExecutor.shutdown()
         super.onDestroy()

@@ -107,7 +107,7 @@ class RadioViewModel(application: Application) : AndroidViewModel(application) {
             _searchLoading.value = true
             _searchError.value = null
             directory.search(query)
-                .onSuccess { _searchResults.value = it }
+                .onSuccess { _searchResults.value = it.distinctBy { s -> s.streamUrl } }
                 .onFailure {
                     _searchResults.value = emptyList()
                     _searchError.value = "Couldn't reach the station directory — check your connection."
@@ -134,10 +134,8 @@ class RadioViewModel(application: Application) : AndroidViewModel(application) {
     fun selectStation(id: String) {
         _playbackError.value = null
         controller?.sendCustomCommand(
-            androidx.media3.session.SessionCommand("SELECT_STATION", android.os.Bundle().apply {
-                putString("stationId", id)
-            }),
-            android.os.Bundle.EMPTY
+            androidx.media3.session.SessionCommand("SELECT_STATION", android.os.Bundle.EMPTY),
+            android.os.Bundle().apply { putString("stationId", id) }
         )
     }
 

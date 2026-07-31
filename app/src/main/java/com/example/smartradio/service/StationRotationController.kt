@@ -21,12 +21,15 @@ class StationRotationController(
     private var stationsTriedThisCycle: Int = 0
     private var muted: Boolean = false
 
+    /** True once the user has picked a station; nothing plays before that. */
+    private var playbackStarted: Boolean = false
+
     fun setShortlist(stations: List<Station>, startIndex: Int = 0) {
         shortlist = stations
         currentIndex = startIndex.coerceIn(0, (stations.size - 1).coerceAtLeast(0))
         stationsTriedThisCycle = 0
-        setMuted(false)
-        if (shortlist.isNotEmpty()) onSwitchTo(shortlist[currentIndex])
+        // Deliberately no onSwitchTo here: playback begins when the user
+        // taps a station, not when the app opens or the list first loads.
     }
 
     fun currentStation(): Station? = shortlist.getOrNull(currentIndex)
@@ -34,9 +37,10 @@ class StationRotationController(
     fun hasShortlist(): Boolean = shortlist.isNotEmpty()
 
     /**
-     * Applies an updated preference list (e.g. after drag-to-reorder or
-     * add/remove) without interrupting current playback, as long as the
-     * currently playing station is still in the list.
+     * Applies an updated preference list (e.g. after reorder or add/remove)
+     * without interrupting current playback, as long as the currently playing
+     * station is still in the list. Only jumps to the top station if the one
+     * the user was actively listening to got removed.
      */
     fun updatePreferenceList(stations: List<Station>) {
         val currentId = currentStation()?.id
@@ -47,14 +51,18 @@ class StationRotationController(
             currentIndex = stillPresentIndex
         } else if (stations.isNotEmpty()) {
             currentIndex = 0
-            setMuted(false)
-            onSwitchTo(stations[0])
+            if (playbackStarted) {
+                // The station being listened to was removed — keep the radio
+                // going with the top preference instead of going silent.
+                setMuted(false)
+                onSwitchTo(stations[0])
+            }
         }
     }
 
     /** Call with every debounced state change from MusicDetectionEngine for the active station. */
     fun onListeningStateChanged(newState: ListeningState) {
-        if (shortlist.isEmpty()) return
+        if (shortlist.isEmpty() || !playbackStarted) return
 
         when (newState) {
             ListeningState.MUSIC -> {
@@ -75,6 +83,7 @@ class StationRotationController(
     fun selectStation(stationId: String) {
         val index = shortlist.indexOfFirst { it.id == stationId }
         if (index == -1) return
+        playbackStarted = true
         currentIndex = index
         stationsTriedThisCycle = 0
         setMuted(false)
