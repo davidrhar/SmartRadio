@@ -6,6 +6,7 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
+import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -17,12 +18,39 @@ data class DiscoveredStation(
     @SerialName("name") val name: String,
     @SerialName("url_resolved") val streamUrl: String,
     @SerialName("countrycode") val countryCode: String = "",
+    @SerialName("country") val country: String = "",
+    @SerialName("state") val state: String = "",
+    @SerialName("language") val language: String = "",
     @SerialName("tags") val tags: String = "",
-    @SerialName("votes") val votes: Int = 0
+    @SerialName("votes") val votes: Int = 0,
+    @SerialName("clickcount") val clickCount: Int = 0,
+    @SerialName("codec") val codec: String = "",
+    @SerialName("bitrate") val bitrate: Int = 0,
+    @SerialName("favicon") val favicon: String = "",
+    @SerialName("lastcheckok") val lastCheckOk: Int = 1
 ) {
     /** Best-effort guess — Radio Browser doesn't cleanly separate "FM simulcast" vs. pure digital. */
     fun guessedKind(): StationKind =
         if (tags.contains("fm", ignoreCase = true)) StationKind.FM_SIMULCAST else StationKind.DIGITAL
+
+    /** "MP3 128kbps" style summary, blank if the directory has no data for this station. */
+    fun qualitySummary(): String {
+        val parts = mutableListOf<String>()
+        if (codec.isNotBlank()) parts += codec
+        if (bitrate > 0) parts += "${bitrate}kbps"
+        return parts.joinToString(" ")
+    }
+
+    /** First listed language, capitalized — Radio Browser stores these lowercase and comma-separated. */
+    fun primaryLanguage(): String? =
+        language.split(",").map { it.trim() }.firstOrNull { it.isNotBlank() }
+            ?.replaceFirstChar { it.uppercase() }
+
+    /** "Country" or "Country, State" when a state is present — most stations (e.g. Singapore) have none. */
+    fun locationSummary(): String =
+        if (state.isNotBlank()) "$country, $state" else country
+
+    fun failedLastCheck(): Boolean = lastCheckOk == 0
 }
 
 /**
@@ -55,25 +83,51 @@ class RadioBrowserApi {
 
     suspend fun search(query: String, limit: Int = 25): Result<List<DiscoveredStation>> =
         withContext(Dispatchers.IO) {
-            var lastError: Throwable? = null
-            for (mirror in mirrors) {
-                val result = runCatching { searchMirror(mirror, query, limit) }
-                result.onSuccess { return@withContext Result.success(it) }
-                result.onFailure { lastError = it }
+            runAcrossMirrors { mirror ->
+                val url = "$mirror/json/stations/search".toHttpUrl().newBuilder()
+                    .addQueryParameter("name", query)
+                    .addQueryParameter("limit", limit.toString())
+                    .addQueryParameter("hidebroken", "true")
+                    .addQueryParameter("order", "clickcount")
+                    .addQueryParameter("reverse", "true")
+                    .build()
+                fetch(mirror, url)
             }
-            Result.failure(lastError ?: IOException("All Radio Browser mirrors failed"))
         }
 
-    private fun searchMirror(mirror: String, query: String, limit: Int): List<DiscoveredStation> {
-        val url = "$mirror/json/stations/search".toHttpUrl()
-            .newBuilder()
-            .addQueryParameter("name", query)
-            .addQueryParameter("limit", limit.toString())
-            .addQueryParameter("hidebroken", "true")
-            .addQueryParameter("order", "votes")
-            .addQueryParameter("reverse", "true")
-            .build()
+    /**
+     * Top stations by recent play count, optionally narrowed to a country.
+     * Pass null/blank countryCode for a global list — used as the default
+     * "Popular Stations" list before the user has typed anything.
+     */
+    suspend fun popular(countryCode: String? = null, limit: Int = 10): Result<List<DiscoveredStation>> =
+        withContext(Dispatchers.IO) {
+            runAcrossMirrors { mirror ->
+                val builder = "$mirror/json/stations/search".toHttpUrl().newBuilder()
+                    .addQueryParameter("limit", limit.toString())
+                    .addQueryParameter("hidebroken", "true")
+                    .addQueryParameter("order", "clickcount")
+                    .addQueryParameter("reverse", "true")
+                if (!countryCode.isNullOrBlank()) {
+                    builder.addQueryParameter("countrycode", countryCode)
+                }
+                fetch(mirror, builder.build())
+            }
+        }
 
+    private inline fun runAcrossMirrors(
+        block: (mirror: String) -> List<DiscoveredStation>
+    ): Result<List<DiscoveredStation>> {
+        var lastError: Throwable? = null
+        for (mirror in mirrors) {
+            val result = runCatching { block(mirror) }
+            result.onSuccess { return Result.success(it) }
+            result.onFailure { lastError = it }
+        }
+        return Result.failure(lastError ?: IOException("All Radio Browser mirrors failed"))
+    }
+
+    private fun fetch(mirror: String, url: HttpUrl): List<DiscoveredStation> {
         val request = Request.Builder()
             .url(url)
             // Radio Browser asks clients to identify themselves.

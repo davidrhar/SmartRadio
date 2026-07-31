@@ -8,6 +8,7 @@ import androidx.media3.common.util.UnstableApi
 import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
 import com.example.smartradio.data.DiscoveredStation
+import com.example.smartradio.data.LocationCountryResolver
 import com.example.smartradio.data.RadioBrowserApi
 import com.example.smartradio.data.Station
 import com.example.smartradio.data.StationKind
@@ -20,6 +21,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import java.util.Locale
 
 @UnstableApi
 class RadioViewModel(application: Application) : AndroidViewModel(application) {
@@ -51,7 +53,33 @@ class RadioViewModel(application: Application) : AndroidViewModel(application) {
     private val _searchError = MutableStateFlow<String?>(null)
     val searchError: StateFlow<String?> = _searchError.asStateFlow()
 
+    // "Popular Stations" (or "Popular Near You") shown before the user types anything.
+    private val _popularStations = MutableStateFlow<List<DiscoveredStation>>(emptyList())
+    val popularStations: StateFlow<List<DiscoveredStation>> = _popularStations.asStateFlow()
+
+    private val _popularLoading = MutableStateFlow(false)
+    val popularLoading: StateFlow<Boolean> = _popularLoading.asStateFlow()
+
+    // Null = showing the global list; non-null = showing results for that resolved country.
+    private val _nearYouCountryCode = MutableStateFlow<String?>(null)
+    private val _nearYouCountryName = MutableStateFlow<String?>(null)
+    val nearYouCountryName: StateFlow<String?> = _nearYouCountryName.asStateFlow()
+
+    private val _nearYouLoading = MutableStateFlow(false)
+    val nearYouLoading: StateFlow<Boolean> = _nearYouLoading.asStateFlow()
+
+    // True once Android has permanently denied further permission prompts (two denials,
+    // or "don't ask again"). The chip greys out rather than doing nothing when tapped.
+    private val _locationPermanentlyDenied = MutableStateFlow(false)
+    val locationPermanentlyDenied: StateFlow<Boolean> = _locationPermanentlyDenied.asStateFlow()
+
+    // A search result that failed Radio Browser's last connectivity check — held here
+    // until the user confirms they want to add it anyway, or cancels.
+    private val _pendingRiskyStation = MutableStateFlow<DiscoveredStation?>(null)
+    val pendingRiskyStation: StateFlow<DiscoveredStation?> = _pendingRiskyStation.asStateFlow()
+
     private var searchJob: Job? = null
+    private var popularJob: Job? = null
 
     private var controller: MediaController? = null
 
@@ -102,10 +130,27 @@ class RadioViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch { repository.addStation(name, streamUrl, kind) }
     }
 
+    /** Adds immediately unless the station failed its last connectivity check, in which case it's held for confirmation. */
     fun addDiscoveredStation(station: DiscoveredStation) {
+        if (station.failedLastCheck()) {
+            _pendingRiskyStation.value = station
+            return
+        }
         viewModelScope.launch {
             repository.addStation(station.name, station.streamUrl, station.guessedKind())
         }
+    }
+
+    fun confirmAddPendingStation() {
+        val station = _pendingRiskyStation.value ?: return
+        viewModelScope.launch {
+            repository.addStation(station.name, station.streamUrl, station.guessedKind())
+        }
+        _pendingRiskyStation.value = null
+    }
+
+    fun cancelPendingStation() {
+        _pendingRiskyStation.value = null
     }
 
     /** Debounced directory search — call on every keystroke in the search field. */
@@ -118,7 +163,7 @@ class RadioViewModel(application: Application) : AndroidViewModel(application) {
             return
         }
         searchJob = viewModelScope.launch {
-            delay(400) // debounce
+            delay(250) // debounce
             _searchLoading.value = true
             _searchError.value = null
             directory.search(query)
@@ -136,6 +181,39 @@ class RadioViewModel(application: Application) : AndroidViewModel(application) {
         _searchResults.value = emptyList()
         _searchError.value = null
         _searchLoading.value = false
+    }
+
+    /** Call once when the "Find a station" dialog opens, to populate the pre-typing default list. */
+    fun loadPopularStations() {
+        popularJob?.cancel()
+        popularJob = viewModelScope.launch {
+            _popularLoading.value = true
+            directory.popular(countryCode = _nearYouCountryCode.value)
+                .onSuccess { _popularStations.value = it.distinctBy { s -> s.streamUrl } }
+                .onFailure { _popularStations.value = emptyList() }
+            _popularLoading.value = false
+        }
+    }
+
+    /** Call after the location permission launcher reports the permission was granted. */
+    fun onLocationPermissionGranted() {
+        viewModelScope.launch {
+            _nearYouLoading.value = true
+            val countryCode = LocationCountryResolver.resolveCountryCode(getApplication())
+            if (countryCode != null) {
+                _nearYouCountryCode.value = countryCode
+                _nearYouCountryName.value = runCatching {
+                    Locale("", countryCode).displayCountry
+                }.getOrDefault(countryCode)
+                loadPopularStations()
+            }
+            _nearYouLoading.value = false
+        }
+    }
+
+    /** Call after the location permission launcher reports denial, with whether it's now permanent. */
+    fun onLocationPermissionDenied(permanentlyDenied: Boolean) {
+        _locationPermanentlyDenied.value = permanentlyDenied
     }
 
     fun removeStation(id: String) {
