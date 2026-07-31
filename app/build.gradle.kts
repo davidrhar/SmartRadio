@@ -120,12 +120,20 @@ dependencies {
     implementation("androidx.media3:media3-session:1.4.0")
     implementation("androidx.media3:media3-common:1.4.0")
 
-    // On-device audio scene classification (speech vs. music) via YAMNet
-    implementation("org.tensorflow:tensorflow-lite:2.16.1")
-    implementation("org.tensorflow:tensorflow-lite-support:0.4.4")
+    // On-device audio scene classification (speech vs. music) via YAMNet.
+    // Using LiteRT (Google's official successor to classic TensorFlow Lite)
+    // instead of org.tensorflow:tensorflow-lite: the classic artifact's
+    // native library (libtensorflowlite_jni.so) was built for 4 KB memory
+    // pages and Google has confirmed it cannot be patched — LiteRT ships a
+    // 16 KB-aligned build and exposes the same org.tensorflow.lite.Interpreter
+    // API, so no source changes were needed beyond this dependency swap.
+    implementation("com.google.ai.edge.litert:litert:2.1.0")
 
-    // Persistence for station list + preference order
-    implementation("androidx.datastore:datastore-preferences:1.1.1")
+    // Persistence for station list + preference order. Deliberately plain
+    // SharedPreferences rather than Jetpack DataStore: DataStore's native
+    // counter library (libdatastore_shared_counter.so) has had an inconsistent
+    // 16 KB-alignment history across versions, and SharedPreferences has no
+    // native library at all, so the problem doesn't exist here by construction.
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.3")
 
     implementation("androidx.core:core-splashscreen:1.0.1")

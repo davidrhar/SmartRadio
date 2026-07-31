@@ -1,18 +1,16 @@
 package com.example.smartradio.data
 
 import android.content.Context
-import androidx.datastore.preferences.core.edit
-import androidx.datastore.preferences.core.stringPreferencesKey
-import androidx.datastore.preferences.preferencesDataStore
+import android.content.SharedPreferences
+import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 
-private val Context.dataStore by preferencesDataStore(name = "smart_radio_stations")
-private val STATIONS_KEY = stringPreferencesKey("stations_json")
+private const val PREFS_NAME = "smart_radio_stations"
+private const val STATIONS_KEY = "stations_json"
 
 private val json = Json { ignoreUnknownKeys = true }
 
@@ -20,25 +18,41 @@ private val json = Json { ignoreUnknownKeys = true }
  * Single source of truth for the shortlisted stations and the order the
  * auto-rotation logic should try them in. Order is simply list index,
  * persisted as JSON so drag-to-reorder in the UI is durable across restarts.
+ *
+ * Backed by plain SharedPreferences rather than Jetpack DataStore: DataStore's
+ * native counter library (libdatastore_shared_counter.so) has an inconsistent
+ * 16 KB page-alignment history across versions, and SharedPreferences has no
+ * native library at all, sidestepping the problem entirely. The public API
+ * here (a reactive Flow<List<Station>>) is unchanged, so nothing else in the
+ * app needed to change.
  */
-class StationRepository(private val context: Context) {
+class StationRepository(context: Context) {
 
-    val stations: Flow<List<Station>> = context.dataStore.data.map { prefs ->
-        val raw = prefs[STATIONS_KEY] ?: return@map defaultStations()
-        runCatching { json.decodeFromString<List<Station>>(raw) }
-            .getOrDefault(defaultStations())
-            .sortedBy { it.preferenceOrder }
+    private val prefs: SharedPreferences =
+        context.applicationContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+
+    val stations: Flow<List<Station>> = callbackFlow {
+        trySend(readStations())
+
+        // SharedPreferences.OnSharedPreferenceChangeListener is held only via
+        // a WeakReference internally by the framework — keep a strong local
+        // reference (captured by the awaitClose closure below) so it isn't
+        // garbage-collected while this flow is being collected.
+        val listener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
+            if (key == STATIONS_KEY) trySend(readStations())
+        }
+        prefs.registerOnSharedPreferenceChangeListener(listener)
+
+        awaitClose { prefs.unregisterOnSharedPreferenceChangeListener(listener) }
     }
 
     suspend fun saveAll(stations: List<Station>) {
         val reindexed = stations.mapIndexed { index, s -> s.copy(preferenceOrder = index) }
-        context.dataStore.edit { prefs ->
-            prefs[STATIONS_KEY] = json.encodeToString(reindexed)
-        }
+        prefs.edit().putString(STATIONS_KEY, json.encodeToString(reindexed)).apply()
     }
 
     suspend fun addStation(name: String, streamUrl: String, kind: StationKind) {
-        val current = stationsSnapshot()
+        val current = readStations()
         val newStation = Station(
             id = java.util.UUID.randomUUID().toString(),
             name = name,
@@ -50,19 +64,20 @@ class StationRepository(private val context: Context) {
     }
 
     suspend fun removeStation(id: String) {
-        saveAll(stationsSnapshot().filterNot { it.id == id })
+        saveAll(readStations().filterNot { it.id == id })
     }
 
     suspend fun reorder(newOrderIds: List<String>) {
-        val byId = stationsSnapshot().associateBy { it.id }
+        val byId = readStations().associateBy { it.id }
         val reordered = newOrderIds.mapNotNull { byId[it] }
         saveAll(reordered)
     }
 
-    private suspend fun stationsSnapshot(): List<Station> {
-        val prefs = context.dataStore.data.first()
-        val raw = prefs[STATIONS_KEY] ?: return defaultStations()
-        return runCatching { json.decodeFromString<List<Station>>(raw) }.getOrDefault(defaultStations())
+    private fun readStations(): List<Station> {
+        val raw = prefs.getString(STATIONS_KEY, null) ?: return defaultStations()
+        return runCatching { json.decodeFromString<List<Station>>(raw) }
+            .getOrDefault(defaultStations())
+            .sortedBy { it.preferenceOrder }
     }
 
     // Placeholder starter list — replace with real stream URLs for your market.
