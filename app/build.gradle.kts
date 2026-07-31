@@ -1,3 +1,5 @@
+import java.net.URL
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
@@ -64,13 +66,13 @@ val downloadYamnetAssets by tasks.registering {
 
         if (!modelFile.exists()) {
             logger.lifecycle("Downloading YAMNet model to ${modelFile.path} ...")
-            java.net.URL("https://tfhub.dev/google/lite-model/yamnet/classification/tflite/1?lite-format=tflite")
+            URL("https://tfhub.dev/google/lite-model/yamnet/classification/tflite/1?lite-format=tflite")
                 .openStream().use { input -> modelFile.outputStream().use { output -> input.copyTo(output) } }
         }
 
         if (!labelsFile.exists()) {
             logger.lifecycle("Downloading YAMNet label map to ${labelsFile.path} ...")
-            val csv = java.net.URL(
+            val csv = URL(
                 "https://raw.githubusercontent.com/tensorflow/models/master/research/audioset/yamnet/yamnet_class_map.csv"
             ).readText()
             // Columns are index,mid,display_name — display_name is the last field.
