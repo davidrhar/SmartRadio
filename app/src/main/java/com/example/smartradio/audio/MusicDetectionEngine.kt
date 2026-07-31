@@ -6,43 +6,46 @@ import kotlinx.coroutines.flow.StateFlow
 enum class ListeningState { MUSIC, NON_MUSIC, UNKNOWN }
 
 /**
- * Each classified window (~1s) is noisy — a DJ talking over a music bed or
- * jingle, a song's quiet intro, or a brief instrumental sting can flip the
- * raw verdict from one window to the next. A strict "N in a row" rule is too
- * fragile for that: a single flipped window resets the count to zero, so a
- * long talk segment with music bedded underneath could go undetected forever.
- *
- * Instead this looks at a rolling window of the last [windowSize] verdicts
- * and requires a clear majority before declaring a state change. In the
- * ambiguous middle ground, it holds the previous state rather than flapping.
+ * Real radio talk segments are very often layered over a continuous music
+ * bed (a DJ chatting over an instrumental, a station ident with music
+ * underneath), so per-second "is this music or speech" can stay dominated by
+ * loud background music even while someone is clearly talking — the speech
+ * signal shows up as intermittent, moderate spikes rather than a clean,
+ * sustained majority. A binary per-window vote discards that accumulating
+ * pattern; this instead tracks a smoothed (EMA) running average of the raw
+ * speech score and reacts once that average crosses a threshold, which
+ * catches sustained-but-intermittent speech that a strict vote misses.
+ * Hysteresis (different enter/exit thresholds) prevents flapping right at
+ * the boundary.
  */
 class MusicDetectionEngine(
-    private val windowSize: Int = 10,       // ~10s of audio considered at a time
-    private val nonMusicThreshold: Int = 7, // >=7/10 non-music windows -> talk/ads
-    private val musicThreshold: Int = 6     // >=6/10 music windows -> music
+    private val emaAlpha: Double = 0.15,
+    private val nonMusicEnterThreshold: Double = 0.12,
+    private val musicEnterThreshold: Double = 0.06,
+    private val minSamplesBeforeDeciding: Int = 5
 ) {
     private val _state = MutableStateFlow(ListeningState.UNKNOWN)
     val state: StateFlow<ListeningState> = _state
 
-    private val recentVerdicts = ArrayDeque<Boolean>() // true = isMusic
+    private var emaSpeechScore = 0.0
+    private var samplesSeen = 0
 
     fun onVerdict(verdict: YamnetClassifier.Verdict) {
-        recentVerdicts.addLast(verdict.isMusic)
-        if (recentVerdicts.size > windowSize) recentVerdicts.removeFirst()
-        if (recentVerdicts.size < windowSize) return // not enough data yet
-
-        val musicCount = recentVerdicts.count { it }
-        val nonMusicCount = recentVerdicts.size - musicCount
+        emaSpeechScore = emaAlpha * verdict.speechScore + (1 - emaAlpha) * emaSpeechScore
+        samplesSeen++
+        android.util.Log.d("SmartRadioClassifier", "emaSpeech=$emaSpeechScore")
+        if (samplesSeen < minSamplesBeforeDeciding) return
 
         when {
-            nonMusicCount >= nonMusicThreshold -> _state.value = ListeningState.NON_MUSIC
-            musicCount >= musicThreshold -> _state.value = ListeningState.MUSIC
-            // else: ambiguous mix — hold whatever state we were already in
+            emaSpeechScore >= nonMusicEnterThreshold -> _state.value = ListeningState.NON_MUSIC
+            emaSpeechScore <= musicEnterThreshold -> _state.value = ListeningState.MUSIC
+            // else: in the hysteresis band between thresholds — hold whatever state we were already in
         }
     }
 
     fun reset() {
-        recentVerdicts.clear()
+        emaSpeechScore = 0.0
+        samplesSeen = 0
         _state.value = ListeningState.UNKNOWN
     }
 }
