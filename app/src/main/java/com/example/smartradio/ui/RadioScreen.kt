@@ -30,6 +30,7 @@ fun RadioScreen(viewModel: RadioViewModel) {
     val stations by viewModel.stations.collectAsState()
     val isPlaying by viewModel.isPlaying.collectAsState()
     val currentStationId by viewModel.currentStationId.collectAsState()
+    val playbackError by viewModel.playbackError.collectAsState()
     var showAddDialog by remember { mutableStateOf(false) }
     var localOrder by remember(stations) { mutableStateOf(stations) }
     val currentStation = stations.find { it.id == currentStationId }
@@ -81,6 +82,15 @@ fun RadioScreen(viewModel: RadioViewModel) {
                 style = MaterialTheme.typography.bodySmall,
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
             )
+
+            if (playbackError != null) {
+                Text(
+                    text = "Couldn't play this station: $playbackError",
+                    color = MaterialTheme.colorScheme.error,
+                    style = MaterialTheme.typography.bodySmall,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
+                )
+            }
 
             LazyColumn(modifier = Modifier.weight(1f)) {
                 items(localOrder, key = { it.id }) { station ->

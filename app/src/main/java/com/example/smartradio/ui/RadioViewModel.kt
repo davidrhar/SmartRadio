@@ -36,6 +36,9 @@ class RadioViewModel(application: Application) : AndroidViewModel(application) {
     private val _currentStationId = MutableStateFlow<String?>(null)
     val currentStationId: StateFlow<String?> = _currentStationId.asStateFlow()
 
+    private val _playbackError = MutableStateFlow<String?>(null)
+    val playbackError: StateFlow<String?> = _playbackError.asStateFlow()
+
     private val _searchResults = MutableStateFlow<List<DiscoveredStation>>(emptyList())
     val searchResults: StateFlow<List<DiscoveredStation>> = _searchResults.asStateFlow()
 
@@ -65,12 +68,16 @@ class RadioViewModel(application: Application) : AndroidViewModel(application) {
             controller?.addListener(object : androidx.media3.common.Player.Listener {
                 override fun onIsPlayingChanged(playing: Boolean) {
                     _isPlaying.value = playing
+                    if (playing) _playbackError.value = null
                 }
                 override fun onMediaItemTransition(
                     mediaItem: androidx.media3.common.MediaItem?,
                     reason: Int
                 ) {
                     _currentStationId.value = mediaItem?.mediaId
+                }
+                override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
+                    _playbackError.value = error.message ?: error.errorCodeName
                 }
             })
         }, MoreExecutors.directExecutor())
@@ -125,6 +132,7 @@ class RadioViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun selectStation(id: String) {
+        _playbackError.value = null
         controller?.sendCustomCommand(
             androidx.media3.session.SessionCommand("SELECT_STATION", android.os.Bundle().apply {
                 putString("stationId", id)
