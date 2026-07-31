@@ -44,8 +44,18 @@ class RadioPlaybackService : MediaSessionService() {
         val tapSink = PcmTapSink { window, _ ->
             // Run inference off the playback thread so it never causes audio glitches.
             classifierExecutor.execute {
-                val verdict = classifier.classify(window)
-                serviceScope.launch { detectionEngine.onVerdict(verdict) }
+                try {
+                    val verdict = classifier.classify(window)
+                    android.util.Log.d(
+                        "SmartRadioClassifier",
+                        "music=${verdict.musicScore} speech=${verdict.speechScore} isMusic=${verdict.isMusic}"
+                    )
+                    serviceScope.launch { detectionEngine.onVerdict(verdict) }
+                } catch (t: Throwable) {
+                    // Without this, a broken model/label file fails silently forever —
+                    // auto-skip would just never fire, with zero indication why.
+                    android.util.Log.e("SmartRadioClassifier", "Classification failed", t)
+                }
             }
         }
         val teeProcessor = TeeAudioProcessor(tapSink)
@@ -107,6 +117,7 @@ class RadioPlaybackService : MediaSessionService() {
 
         serviceScope.launch {
             detectionEngine.state.collect { state ->
+                android.util.Log.d("SmartRadioClassifier", "listening state -> $state")
                 rotationController.onListeningStateChanged(state)
             }
         }

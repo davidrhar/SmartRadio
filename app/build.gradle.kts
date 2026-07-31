@@ -75,12 +75,23 @@ val downloadYamnetAssets by tasks.registering {
             val csv = URL(
                 "https://raw.githubusercontent.com/tensorflow/models/master/research/audioset/yamnet/yamnet_class_map.csv"
             ).readText()
-            // Columns are index,mid,display_name — display_name is the last field.
-            // Best-effort split; verify line count is 521 after first build.
+            // Columns are index,mid,display_name. display_name is always last,
+            // but can itself contain commas (e.g. "Livestock, farm animals,
+            // working animals") — the first two commas are always the real
+            // field separators, so split on those rather than the last comma.
+            fun displayNameOf(line: String): String {
+                var commaCount = 0
+                var i = 0
+                while (i < line.length && commaCount < 2) {
+                    if (line[i] == ',') commaCount++
+                    i++
+                }
+                return line.substring(i).trim().trim('"')
+            }
             val labels = csv.lineSequence()
                 .drop(1) // header
                 .filter { it.isNotBlank() }
-                .map { line -> line.substringAfterLast(',').trim('"') }
+                .map { line -> displayNameOf(line) }
                 .joinToString("\n")
             labelsFile.writeText(labels)
         }
