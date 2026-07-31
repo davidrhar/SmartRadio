@@ -39,6 +39,9 @@ class RadioViewModel(application: Application) : AndroidViewModel(application) {
     private val _playbackError = MutableStateFlow<String?>(null)
     val playbackError: StateFlow<String?> = _playbackError.asStateFlow()
 
+    private val _nowPlayingTrack = MutableStateFlow<String?>(null)
+    val nowPlayingTrack: StateFlow<String?> = _nowPlayingTrack.asStateFlow()
+
     private val _searchResults = MutableStateFlow<List<DiscoveredStation>>(emptyList())
     val searchResults: StateFlow<List<DiscoveredStation>> = _searchResults.asStateFlow()
 
@@ -75,9 +78,21 @@ class RadioViewModel(application: Application) : AndroidViewModel(application) {
                     reason: Int
                 ) {
                     _currentStationId.value = mediaItem?.mediaId
+                    _nowPlayingTrack.value = null
                 }
                 override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
                     _playbackError.value = error.message ?: error.errorCodeName
+                }
+                override fun onMetadata(metadata: androidx.media3.common.Metadata) {
+                    // ICY (Shoutcast/Icecast) streams embed a live "now playing" title
+                    // directly in the audio stream — not every station sends this.
+                    for (i in 0 until metadata.length()) {
+                        val entry = metadata.get(i)
+                        if (entry is androidx.media3.extractor.metadata.icy.IcyInfo) {
+                            val title = entry.title
+                            _nowPlayingTrack.value = if (!title.isNullOrBlank()) title else null
+                        }
+                    }
                 }
             })
         }, MoreExecutors.directExecutor())

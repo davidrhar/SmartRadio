@@ -47,6 +47,7 @@ fun RadioScreen(viewModel: RadioViewModel) {
     val isPlaying by viewModel.isPlaying.collectAsState()
     val currentStationId by viewModel.currentStationId.collectAsState()
     val playbackError by viewModel.playbackError.collectAsState()
+    val nowPlayingTrack by viewModel.nowPlayingTrack.collectAsState()
     var showAddDialog by remember { mutableStateOf(false) }
     var localOrder by remember(stations) { mutableStateOf(stations) }
     val currentStation = stations.find { it.id == currentStationId }
@@ -75,6 +76,7 @@ fun RadioScreen(viewModel: RadioViewModel) {
                 station = currentStation,
                 isPlaying = isPlaying,
                 playbackError = playbackError,
+                nowPlayingTrack = nowPlayingTrack,
                 onTogglePlay = { viewModel.togglePlayPause() }
             )
 
@@ -137,6 +139,7 @@ private fun NowPlayingHeader(
     station: Station?,
     isPlaying: Boolean,
     playbackError: String?,
+    nowPlayingTrack: String?,
     onTogglePlay: () -> Unit
 ) {
     Column(modifier = Modifier.fillMaxWidth().padding(20.dp, 12.dp, 20.dp, 8.dp)) {
@@ -182,6 +185,17 @@ private fun NowPlayingHeader(
                     Pill(if (station.kind == StationKind.FM_SIMULCAST) "FM simulcast" else "Digital")
                 }
                 Waveform(isPlaying = isPlaying, modifier = Modifier.height(28.dp).width(84.dp))
+            }
+            if (!nowPlayingTrack.isNullOrBlank()) {
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    "♪ $nowPlayingTrack",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    fontSize = 12.5.sp,
+                    fontWeight = FontWeight.Medium,
+                    maxLines = 1,
+                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                )
             }
             if (playbackError != null) {
                 Spacer(Modifier.height(8.dp))
