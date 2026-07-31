@@ -7,7 +7,8 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.DragHandle
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.*
@@ -18,8 +19,6 @@ import androidx.compose.ui.unit.dp
 import androidx.media3.common.util.UnstableApi
 import com.example.smartradio.data.Station
 import com.example.smartradio.data.StationKind
-import sh.calvin.reorderable.ReorderableItem
-import sh.calvin.reorderable.rememberReorderableLazyListState
 
 @OptIn(ExperimentalMaterial3Api::class)
 @UnstableApi
@@ -45,7 +44,7 @@ fun RadioScreen(viewModel: RadioViewModel) {
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = "Drag to set preference order. Auto-skips ads/talk.",
+                    text = "Set preference order with ↑/↓. Auto-skips ads/talk.",
                     style = MaterialTheme.typography.bodyMedium
                 )
                 IconButton(onClick = { viewModel.togglePlayPause() }) {
@@ -56,23 +55,28 @@ fun RadioScreen(viewModel: RadioViewModel) {
                 }
             }
 
-            val listState = androidx.compose.foundation.lazy.rememberLazyListState()
-            val reorderableState = rememberReorderableLazyListState(listState) { from, to ->
-                localOrder = localOrder.toMutableList().apply {
-                    add(to.index, removeAt(from.index))
-                }
-                viewModel.reorder(localOrder.map { it.id })
-            }
-
-            LazyColumn(state = listState, modifier = Modifier.weight(1f)) {
+            LazyColumn(modifier = Modifier.weight(1f)) {
                 items(localOrder, key = { it.id }) { station ->
-                    ReorderableItem(reorderableState, key = station.id) { _ ->
-                        StationRow(
-                            station = station,
-                            onClick = { viewModel.selectStation(station.id) },
-                            onRemove = { viewModel.removeStation(station.id) }
-                        )
-                    }
+                    val index = localOrder.indexOf(station)
+                    StationRow(
+                        station = station,
+                        canMoveUp = index > 0,
+                        canMoveDown = index < localOrder.size - 1,
+                        onClick = { viewModel.selectStation(station.id) },
+                        onRemove = { viewModel.removeStation(station.id) },
+                        onMoveUp = {
+                            localOrder = localOrder.toMutableList().apply {
+                                add(index - 1, removeAt(index))
+                            }
+                            viewModel.reorder(localOrder.map { it.id })
+                        },
+                        onMoveDown = {
+                            localOrder = localOrder.toMutableList().apply {
+                                add(index + 1, removeAt(index))
+                            }
+                            viewModel.reorder(localOrder.map { it.id })
+                        }
+                    )
                 }
             }
         }
@@ -94,13 +98,30 @@ fun RadioScreen(viewModel: RadioViewModel) {
 }
 
 @Composable
-private fun StationRow(station: Station, onClick: () -> Unit, onRemove: () -> Unit) {
+private fun StationRow(
+    station: Station,
+    canMoveUp: Boolean,
+    canMoveDown: Boolean,
+    onClick: () -> Unit,
+    onRemove: () -> Unit,
+    onMoveUp: () -> Unit,
+    onMoveDown: () -> Unit
+) {
     ListItem(
         headlineContent = { Text(station.name) },
         supportingContent = {
             Text(if (station.kind == StationKind.FM_SIMULCAST) "FM simulcast" else "Digital")
         },
-        leadingContent = { Icon(Icons.Default.DragHandle, contentDescription = null) },
+        leadingContent = {
+            Column {
+                IconButton(onClick = onMoveUp, enabled = canMoveUp, modifier = Modifier.size(28.dp)) {
+                    Icon(Icons.Default.KeyboardArrowUp, contentDescription = "Move up")
+                }
+                IconButton(onClick = onMoveDown, enabled = canMoveDown, modifier = Modifier.size(28.dp)) {
+                    Icon(Icons.Default.KeyboardArrowDown, contentDescription = "Move down")
+                }
+            }
+        },
         trailingContent = {
             IconButton(onClick = onRemove) {
                 Icon(Icons.Default.Close, contentDescription = "Remove")

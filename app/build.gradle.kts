@@ -117,9 +117,6 @@ dependencies {
     implementation("androidx.datastore:datastore-preferences:1.1.1")
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.3")
 
-    // Drag-to-reorder station list
-    implementation("sh.calvin.reorderable:reorderable:1.5.2")
-
     implementation("androidx.core:core-splashscreen:1.0.1")
     implementation("com.google.guava:guava:33.2.1-android")
 
