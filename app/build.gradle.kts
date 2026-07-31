@@ -10,12 +10,12 @@ plugins {
 
 android {
     namespace = "com.example.smartradio"
-    compileSdk = 34
+    compileSdk = 35
 
     defaultConfig {
         applicationId = "com.example.smartradio"
         minSdk = 26
-        targetSdk = 34
+        targetSdk = 35
         versionCode = 1
         versionName = "0.1.0"
     }
@@ -59,7 +59,7 @@ kotlin {
 // while generating the project. Your actual build machine (GitHub Actions,
 // Android Studio) does have network, so this task fetches them automatically
 // the first time you build — no manual download step needed.
-val downloadYamnetAssets by tasks.registering {
+val downloadYamnetAssets = tasks.register("downloadYamnetAssets") {
     val assetsDir = file("src/main/assets")
     val modelFile = File(assetsDir, "yamnet.tflite")
     val labelsFile = File(assetsDir, "yamnet_label_list.txt")
