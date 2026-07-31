@@ -1,5 +1,6 @@
 package com.example.smartradio.ui
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -15,6 +16,8 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.media3.common.util.UnstableApi
 import com.example.smartradio.data.Station
@@ -26,8 +29,10 @@ import com.example.smartradio.data.StationKind
 fun RadioScreen(viewModel: RadioViewModel) {
     val stations by viewModel.stations.collectAsState()
     val isPlaying by viewModel.isPlaying.collectAsState()
+    val currentStationId by viewModel.currentStationId.collectAsState()
     var showAddDialog by remember { mutableStateOf(false) }
     var localOrder by remember(stations) { mutableStateOf(stations) }
+    val currentStation = stations.find { it.id == currentStationId }
 
     Scaffold(
         topBar = { TopAppBar(title = { Text("Smart Radio") }) },
@@ -38,28 +43,51 @@ fun RadioScreen(viewModel: RadioViewModel) {
         }
     ) { padding ->
         Column(modifier = Modifier.padding(padding).fillMaxSize()) {
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(16.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = "Set preference order with ↑/↓. Auto-skips ads/talk.",
-                    style = MaterialTheme.typography.bodyMedium
-                )
-                IconButton(onClick = { viewModel.togglePlayPause() }) {
-                    Icon(
-                        if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
-                        contentDescription = "Play/Pause"
+            if (currentStation != null) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(MaterialTheme.colorScheme.secondaryContainer)
+                        .padding(horizontal = 16.dp, vertical = 12.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column {
+                        Text("NOW PLAYING", style = MaterialTheme.typography.labelSmall)
+                        Text(currentStation.name, style = MaterialTheme.typography.titleMedium)
+                    }
+                    IconButton(onClick = { viewModel.togglePlayPause() }) {
+                        Icon(
+                            if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                            contentDescription = "Play/Pause"
+                        )
+                    }
+                }
+            } else {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(16.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "Tap a station below to start listening.",
+                        style = MaterialTheme.typography.bodyMedium
                     )
                 }
             }
+
+            Text(
+                text = "Set preference order with ↑/↓. Auto-skips ads/talk.",
+                style = MaterialTheme.typography.bodySmall,
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+            )
 
             LazyColumn(modifier = Modifier.weight(1f)) {
                 items(localOrder, key = { it.id }) { station ->
                     val index = localOrder.indexOf(station)
                     StationRow(
                         station = station,
+                        isPlaying = station.id == currentStationId,
                         canMoveUp = index > 0,
                         canMoveDown = index < localOrder.size - 1,
                         onClick = { viewModel.selectStation(station.id) },
@@ -100,6 +128,7 @@ fun RadioScreen(viewModel: RadioViewModel) {
 @Composable
 private fun StationRow(
     station: Station,
+    isPlaying: Boolean,
     canMoveUp: Boolean,
     canMoveDown: Boolean,
     onClick: () -> Unit,
@@ -108,9 +137,17 @@ private fun StationRow(
     onMoveDown: () -> Unit
 ) {
     ListItem(
-        headlineContent = { Text(station.name) },
+        headlineContent = {
+            Text(
+                station.name,
+                fontWeight = if (isPlaying) FontWeight.Bold else FontWeight.Normal
+            )
+        },
         supportingContent = {
-            Text(if (station.kind == StationKind.FM_SIMULCAST) "FM simulcast" else "Digital")
+            Text(
+                (if (isPlaying) "▶ Playing now · " else "") +
+                    if (station.kind == StationKind.FM_SIMULCAST) "FM simulcast" else "Digital"
+            )
         },
         leadingContent = {
             Column {
@@ -127,6 +164,9 @@ private fun StationRow(
                 Icon(Icons.Default.Close, contentDescription = "Remove")
             }
         },
+        colors = ListItemDefaults.colors(
+            containerColor = if (isPlaying) MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.4f) else Color.Unspecified
+        ),
         modifier = Modifier.fillMaxWidth().clickable(onClick = onClick)
     )
     Divider()

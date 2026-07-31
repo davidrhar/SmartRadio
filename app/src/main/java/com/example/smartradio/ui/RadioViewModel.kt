@@ -33,6 +33,9 @@ class RadioViewModel(application: Application) : AndroidViewModel(application) {
     private val _isPlaying = MutableStateFlow(false)
     val isPlaying: StateFlow<Boolean> = _isPlaying.asStateFlow()
 
+    private val _currentStationId = MutableStateFlow<String?>(null)
+    val currentStationId: StateFlow<String?> = _currentStationId.asStateFlow()
+
     private val _searchResults = MutableStateFlow<List<DiscoveredStation>>(emptyList())
     val searchResults: StateFlow<List<DiscoveredStation>> = _searchResults.asStateFlow()
 
@@ -57,9 +60,17 @@ class RadioViewModel(application: Application) : AndroidViewModel(application) {
         val future = MediaController.Builder(application, sessionToken).buildAsync()
         future.addListener({
             controller = future.get()
+            _currentStationId.value = controller?.currentMediaItem?.mediaId
+            _isPlaying.value = controller?.isPlaying ?: false
             controller?.addListener(object : androidx.media3.common.Player.Listener {
                 override fun onIsPlayingChanged(playing: Boolean) {
                     _isPlaying.value = playing
+                }
+                override fun onMediaItemTransition(
+                    mediaItem: androidx.media3.common.MediaItem?,
+                    reason: Int
+                ) {
+                    _currentStationId.value = mediaItem?.mediaId
                 }
             })
         }, MoreExecutors.directExecutor())

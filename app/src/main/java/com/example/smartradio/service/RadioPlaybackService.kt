@@ -122,7 +122,16 @@ class RadioPlaybackService : MediaSessionService() {
 
     private fun playStation(station: Station) {
         detectionEngine.reset()
-        player.setMediaItem(MediaItem.fromUri(station.streamUrl))
+        val mediaItem = MediaItem.Builder()
+            .setUri(station.streamUrl)
+            .setMediaId(station.id)
+            .setMediaMetadata(
+                androidx.media3.common.MediaMetadata.Builder()
+                    .setTitle(station.name)
+                    .build()
+            )
+            .build()
+        player.setMediaItem(mediaItem)
         player.prepare()
         player.play()
     }
