@@ -1,27 +1,43 @@
 package com.example.smartradio.ui
 
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Radio
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.media3.common.util.UnstableApi
 import com.example.smartradio.data.Station
 import com.example.smartradio.data.StationKind
+import com.example.smartradio.ui.theme.AvatarPalette
+import com.example.smartradio.ui.theme.PillBackground
+import com.example.smartradio.ui.theme.PillText
 
 @OptIn(ExperimentalMaterial3Api::class)
 @UnstableApi
@@ -36,67 +52,48 @@ fun RadioScreen(viewModel: RadioViewModel) {
     val currentStation = stations.find { it.id == currentStationId }
 
     Scaffold(
-        topBar = { TopAppBar(title = { Text("Smart Radio") }) },
+        containerColor = MaterialTheme.colorScheme.background,
+        topBar = {
+            TopAppBar(
+                title = { Text("Smart Radio", fontWeight = FontWeight.Bold) },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.background
+                )
+            )
+        },
         floatingActionButton = {
-            FloatingActionButton(onClick = { showAddDialog = true }) {
-                Icon(Icons.Default.Add, contentDescription = "Add station")
+            FloatingActionButton(
+                onClick = { showAddDialog = true },
+                containerColor = MaterialTheme.colorScheme.primary
+            ) {
+                Icon(Icons.Default.Add, contentDescription = "Add station", tint = Color.White)
             }
         }
     ) { padding ->
         Column(modifier = Modifier.padding(padding).fillMaxSize()) {
-            if (currentStation != null) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .background(MaterialTheme.colorScheme.secondaryContainer)
-                        .padding(horizontal = 16.dp, vertical = 12.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column {
-                        Text("NOW PLAYING", style = MaterialTheme.typography.labelSmall)
-                        Text(currentStation.name, style = MaterialTheme.typography.titleMedium)
-                    }
-                    IconButton(onClick = { viewModel.togglePlayPause() }) {
-                        Icon(
-                            if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
-                            contentDescription = "Play/Pause"
-                        )
-                    }
-                }
-            } else {
-                Row(
-                    modifier = Modifier.fillMaxWidth().padding(16.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = "Tap a station below to start listening.",
-                        style = MaterialTheme.typography.bodyMedium
-                    )
-                }
-            }
-
-            Text(
-                text = "Set preference order with ↑/↓. Auto-skips ads/talk.",
-                style = MaterialTheme.typography.bodySmall,
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+            NowPlayingHeader(
+                station = currentStation,
+                isPlaying = isPlaying,
+                playbackError = playbackError,
+                onTogglePlay = { viewModel.togglePlayPause() }
             )
 
-            if (playbackError != null) {
-                Text(
-                    text = "Couldn't play this station: $playbackError",
-                    color = MaterialTheme.colorScheme.error,
-                    style = MaterialTheme.typography.bodySmall,
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
-                )
-            }
+            Text(
+                text = "Set preference order with the arrows below. Auto-skips ads/talk.",
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                fontSize = 12.sp,
+                modifier = Modifier.padding(horizontal = 20.dp, vertical = 6.dp)
+            )
 
-            LazyColumn(modifier = Modifier.weight(1f)) {
-                items(localOrder, key = { it.id }) { station ->
-                    val index = localOrder.indexOf(station)
-                    StationRow(
+            LazyColumn(
+                modifier = Modifier.weight(1f),
+                contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 88.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                itemsIndexed(localOrder, key = { _, station -> station.id }) { index, station ->
+                    StationCard(
                         station = station,
+                        avatarColor = AvatarPalette[index % AvatarPalette.size],
                         isPlaying = station.id == currentStationId,
                         canMoveUp = index > 0,
                         canMoveDown = index < localOrder.size - 1,
@@ -136,8 +133,128 @@ fun RadioScreen(viewModel: RadioViewModel) {
 }
 
 @Composable
-private fun StationRow(
+private fun NowPlayingHeader(
+    station: Station?,
+    isPlaying: Boolean,
+    playbackError: String?,
+    onTogglePlay: () -> Unit
+) {
+    Column(modifier = Modifier.fillMaxWidth().padding(20.dp, 12.dp, 20.dp, 8.dp)) {
+        if (station != null) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    "NOW PLAYING",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    letterSpacing = 1.sp
+                )
+                Box(
+                    modifier = Modifier
+                        .size(34.dp)
+                        .clip(CircleShape)
+                        .background(MaterialTheme.colorScheme.primary)
+                        .clickable(onClick = onTogglePlay),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                        contentDescription = "Play/Pause",
+                        tint = Color.White,
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
+            }
+            Spacer(Modifier.height(6.dp))
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        station.name,
+                        fontSize = 24.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onBackground
+                    )
+                    Spacer(Modifier.height(6.dp))
+                    Pill(if (station.kind == StationKind.FM_SIMULCAST) "FM simulcast" else "Digital")
+                }
+                Waveform(isPlaying = isPlaying, modifier = Modifier.height(28.dp).width(84.dp))
+            }
+            if (playbackError != null) {
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    "Couldn't play this station: $playbackError",
+                    color = MaterialTheme.colorScheme.error,
+                    fontSize = 12.sp
+                )
+            }
+        } else {
+            Text(
+                "Tap a station below to start listening.",
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                fontSize = 14.sp
+            )
+        }
+    }
+}
+
+@Composable
+private fun Waveform(isPlaying: Boolean, modifier: Modifier = Modifier, barCount: Int = 18) {
+    val infiniteTransition = rememberInfiniteTransition(label = "waveform")
+    val phase by infiniteTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = (2 * Math.PI).toFloat(),
+        animationSpec = infiniteRepeatable(animation = tween(1400, easing = LinearEasing)),
+        label = "phase"
+    )
+    Row(
+        modifier = modifier,
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(2.dp)
+    ) {
+        repeat(barCount) { i ->
+            val fraction = if (isPlaying) {
+                val raw = (kotlin.math.sin(phase + i * 0.6f) + 1f) / 2f
+                0.2f + raw * 0.8f
+            } else {
+                0.18f
+            }
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxHeight(fraction)
+                    .background(
+                        color = if (isPlaying) {
+                            MaterialTheme.colorScheme.secondary
+                        } else {
+                            MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f)
+                        },
+                        shape = RoundedCornerShape(2.dp)
+                    )
+            )
+        }
+    }
+}
+
+@Composable
+private fun Pill(text: String) {
+    Box(
+        modifier = Modifier
+            .clip(RoundedCornerShape(20.dp))
+            .background(PillBackground)
+            .padding(horizontal = 9.dp, vertical = 3.dp)
+    ) {
+        Text(text, color = PillText, fontSize = 10.sp, fontWeight = FontWeight.SemiBold)
+    }
+}
+
+@Composable
+private fun StationCard(
     station: Station,
+    avatarColor: Color,
     isPlaying: Boolean,
     canMoveUp: Boolean,
     canMoveDown: Boolean,
@@ -146,40 +263,83 @@ private fun StationRow(
     onMoveUp: () -> Unit,
     onMoveDown: () -> Unit
 ) {
-    ListItem(
-        headlineContent = {
-            Text(
-                station.name,
-                fontWeight = if (isPlaying) FontWeight.Bold else FontWeight.Normal
-            )
+    Surface(
+        modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).clickable(onClick = onClick),
+        color = if (isPlaying) {
+            MaterialTheme.colorScheme.secondaryContainer
+        } else {
+            MaterialTheme.colorScheme.surface
         },
-        supportingContent = {
-            Text(
-                (if (isPlaying) "▶ Playing now · " else "") +
-                    if (station.kind == StationKind.FM_SIMULCAST) "FM simulcast" else "Digital"
-            )
-        },
-        leadingContent = {
-            Column {
-                IconButton(onClick = onMoveUp, enabled = canMoveUp, modifier = Modifier.size(28.dp)) {
-                    Icon(Icons.Default.KeyboardArrowUp, contentDescription = "Move up")
-                }
-                IconButton(onClick = onMoveDown, enabled = canMoveDown, modifier = Modifier.size(28.dp)) {
-                    Icon(Icons.Default.KeyboardArrowDown, contentDescription = "Move down")
-                }
+        tonalElevation = if (isPlaying) 0.dp else 1.dp,
+        shadowElevation = 1.dp
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(
+                modifier = Modifier.size(46.dp).clip(RoundedCornerShape(14.dp)).background(avatarColor),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = if (station.kind == StationKind.FM_SIMULCAST) Icons.Default.Radio else Icons.Default.MusicNote,
+                    contentDescription = null,
+                    tint = Color.White
+                )
             }
-        },
-        trailingContent = {
-            IconButton(onClick = onRemove) {
-                Icon(Icons.Default.Close, contentDescription = "Remove")
+
+            Spacer(Modifier.width(12.dp))
+
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    station.name,
+                    fontSize = 15.sp,
+                    fontWeight = if (isPlaying) FontWeight.Bold else FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Spacer(Modifier.height(5.dp))
+                Pill(if (station.kind == StationKind.FM_SIMULCAST) "FM" else "Digital")
             }
-        },
-        colors = ListItemDefaults.colors(
-            containerColor = if (isPlaying) MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.4f) else Color.Unspecified
-        ),
-        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick)
-    )
-    Divider()
+
+            Spacer(Modifier.width(4.dp))
+
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                CircleActionButton(icon = Icons.Default.KeyboardArrowUp, enabled = canMoveUp, filled = true, onClick = onMoveUp)
+                Spacer(Modifier.height(6.dp))
+                CircleActionButton(icon = Icons.Default.KeyboardArrowDown, enabled = canMoveDown, filled = true, onClick = onMoveDown)
+            }
+
+            Spacer(Modifier.width(8.dp))
+
+            CircleActionButton(icon = Icons.Default.Close, enabled = true, filled = false, onClick = onRemove)
+        }
+    }
+}
+
+@Composable
+private fun CircleActionButton(
+    icon: ImageVector,
+    enabled: Boolean,
+    filled: Boolean,
+    onClick: () -> Unit
+) {
+    val background = when {
+        filled && enabled -> MaterialTheme.colorScheme.primary
+        filled && !enabled -> MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)
+        else -> MaterialTheme.colorScheme.surfaceVariant
+    }
+    val tint = if (filled) Color.White else MaterialTheme.colorScheme.onSurfaceVariant
+
+    Box(
+        modifier = Modifier
+            .size(28.dp)
+            .clip(CircleShape)
+            .background(background)
+            .then(if (enabled) Modifier.clickable(onClick = onClick) else Modifier),
+        contentAlignment = Alignment.Center
+    ) {
+        Icon(icon, contentDescription = null, tint = tint, modifier = Modifier.size(16.dp))
+    }
 }
 
 @Composable

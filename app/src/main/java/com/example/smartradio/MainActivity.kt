@@ -8,12 +8,12 @@ import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.ui.Modifier
 import androidx.media3.common.util.UnstableApi
 import com.example.smartradio.ui.RadioScreen
 import com.example.smartradio.ui.RadioViewModel
+import com.example.smartradio.ui.theme.SmartRadioTheme
 
 @UnstableApi
 class MainActivity : ComponentActivity() {
@@ -34,7 +34,7 @@ class MainActivity : ComponentActivity() {
         // Media3 promotes it to a foreground service itself once playback starts.
 
         setContent {
-            MaterialTheme {
+            SmartRadioTheme {
                 Surface(modifier = Modifier.fillMaxSize()) {
                     RadioScreen(viewModel)
                 }
