@@ -353,8 +353,8 @@ private fun MutedBanner() {
     }
 }
 
-private fun Modifier.graphicsLayerAlpha(alpha: Float): Modifier =
-    this.then(Modifier.graphicsLayer(alpha = alpha))
+private fun Modifier.graphicsLayerAlpha(alphaValue: Float): Modifier =
+    this.graphicsLayer { alpha = alphaValue }
 
 @Composable
 private fun Waveform(isPlaying: Boolean, isMuted: Boolean = false, modifier: Modifier = Modifier, barCount: Int = 18) {
