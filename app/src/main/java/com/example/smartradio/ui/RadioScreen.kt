@@ -39,8 +39,8 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.graphicsLayer
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
@@ -339,7 +339,7 @@ private fun MutedBanner() {
             Icons.Default.VolumeOff,
             contentDescription = null,
             tint = MutedAmber,
-            modifier = Modifier.size(16.dp).graphicsLayerAlpha(alpha)
+            modifier = Modifier.size(16.dp).alpha(alpha)
         )
         Spacer(Modifier.width(8.dp))
         Column {
@@ -352,9 +352,6 @@ private fun MutedBanner() {
         }
     }
 }
-
-private fun Modifier.graphicsLayerAlpha(alphaValue: Float): Modifier =
-    this.graphicsLayer { alpha = alphaValue }
 
 @Composable
 private fun Waveform(isPlaying: Boolean, isMuted: Boolean = false, modifier: Modifier = Modifier, barCount: Int = 18) {
