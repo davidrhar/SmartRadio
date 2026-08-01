@@ -86,7 +86,7 @@ fun RadioScreen(viewModel: RadioViewModel) {
         containerColor = MaterialTheme.colorScheme.background,
         topBar = {
             TopAppBar(
-                title = { Text("Smart Radio", fontWeight = FontWeight.Bold) },
+                title = { Text("Skipadoodle", fontWeight = FontWeight.Bold) },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.background
                 )

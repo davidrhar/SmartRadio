@@ -1,4 +1,4 @@
-# Smart Radio
+# Skipadoodle
 
 Android app (Kotlin + Jetpack Compose + Media3/ExoPlayer) that:
 - Streams a shortlist of FM-simulcast and digital radio stations, in a user-set preference order (drag to reorder).
