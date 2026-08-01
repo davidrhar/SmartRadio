@@ -47,10 +47,11 @@ class RadioViewModel(application: Application) : AndroidViewModel(application) {
     private val _nowPlayingTrack = MutableStateFlow<String?>(null)
     val nowPlayingTrack: StateFlow<String?> = _nowPlayingTrack.asStateFlow()
 
-    // True when the rotation controller has muted in place after a full lap
-    // found no music anywhere — distinct from a user-initiated pause.
-    private val _isMuted = MutableStateFlow(false)
-    val isMuted: StateFlow<Boolean> = _isMuted.asStateFlow()
+    // True when the rotation controller has hopped through the whole shortlist
+    // several times over and given up, pausing playback — distinct from a
+    // user-initiated pause.
+    private val _noStationsAvailable = MutableStateFlow(false)
+    val noStationsAvailable: StateFlow<Boolean> = _noStationsAvailable.asStateFlow()
 
     private val _autoSkipEvent = MutableStateFlow<AutoSkipEvent?>(null)
     val autoSkipEvent: StateFlow<AutoSkipEvent?> = _autoSkipEvent.asStateFlow()
@@ -118,6 +119,7 @@ class RadioViewModel(application: Application) : AndroidViewModel(application) {
                 ) {
                     _currentStationId.value = mediaItem?.mediaId
                     _nowPlayingTrack.value = null
+                    _noStationsAvailable.value = false
                     val autoSkipFrom = mediaItem?.mediaMetadata?.extras?.getString("autoSkipFrom")
                     if (!autoSkipFrom.isNullOrBlank()) {
                         _autoSkipEvent.value = AutoSkipEvent(
@@ -130,21 +132,17 @@ class RadioViewModel(application: Application) : AndroidViewModel(application) {
                 override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
                     _playbackError.value = error.message ?: error.errorCodeName
                 }
-                override fun onVolumeChanged(volume: Float) {
-                    // The rotation controller mutes in place (volume 0) rather than pausing
-                    // when a full lap of the shortlist turns up no music anywhere.
-                    _isMuted.value = volume <= 0f
-                }
-                override fun onMetadata(metadata: androidx.media3.common.Metadata) {
+                override fun onMediaMetadataChanged(mediaMetadata: androidx.media3.common.MediaMetadata) {
                     // ICY (Shoutcast/Icecast) streams embed a live "now playing" title
-                    // directly in the audio stream — not every station sends this.
-                    for (i in 0 until metadata.length()) {
-                        val entry = metadata.get(i)
-                        if (entry is androidx.media3.extractor.metadata.icy.IcyInfo) {
-                            val title = entry.title
-                            _nowPlayingTrack.value = if (!title.isNullOrBlank()) title else null
-                        }
-                    }
+                    // directly in the audio stream — not every station sends this. The
+                    // service folds it into MediaMetadata.artist (see
+                    // RadioPlaybackService.onMetadata) since raw Metadata/onMetadata
+                    // events don't cross the MediaSession -> MediaController boundary,
+                    // but MediaMetadata changes do. Same channel carries the
+                    // "exhausted the shortlist" flag via extras.
+                    val title = mediaMetadata.artist?.toString()
+                    _nowPlayingTrack.value = if (!title.isNullOrBlank()) title else null
+                    _noStationsAvailable.value = mediaMetadata.extras?.getBoolean("noStationsAvailable", false) ?: false
                 }
             })
         }, MoreExecutors.directExecutor())

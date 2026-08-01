@@ -77,6 +77,39 @@ class RadioPlaybackService : MediaSessionService() {
         }
 
         player = ExoPlayer.Builder(this, renderersFactory).build()
+        player.addListener(object : androidx.media3.common.Player.Listener {
+            // Raw ICY Metadata events (Player.Listener.onMetadata) never cross the
+            // MediaSession -> MediaController IPC boundary in media3 — only synced
+            // player state (like MediaMetadata) does. So instead of exposing the ICY
+            // title as a one-shot event, fold it into the current MediaItem's
+            // MediaMetadata (as the artist) via replaceMediaItem, which *is* synced
+            // and reaches MediaController listeners as onMediaMetadataChanged.
+            override fun onMetadata(metadata: androidx.media3.common.Metadata) {
+                for (i in 0 until metadata.length()) {
+                    val entry = metadata.get(i)
+                    if (entry !is androidx.media3.extractor.metadata.icy.IcyInfo) continue
+                    val title = entry.title?.takeIf { it.isNotBlank() }
+                    val currentItem = player.currentMediaItem ?: continue
+                    if (currentItem.mediaMetadata.artist?.toString() == title) continue
+                    val currentIndex = player.currentMediaItemIndex
+                    if (currentIndex == androidx.media3.common.C.INDEX_UNSET) continue
+                    player.replaceMediaItem(
+                        currentIndex,
+                        currentItem.buildUpon()
+                            .setMediaMetadata(
+                                currentItem.mediaMetadata.buildUpon().setArtist(title).build()
+                            )
+                            .build()
+                    )
+                }
+            }
+
+            override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
+                // Unreachable stream, dropped connection, unsupported format, etc. —
+                // treat exactly like sustained non-music: hop to the next station.
+                rotationController.onPlaybackError()
+            }
+        })
         val selectStationCommand = androidx.media3.session.SessionCommand("SELECT_STATION", android.os.Bundle.EMPTY)
         mediaSession = MediaSession.Builder(this, player)
             .setCallback(object : MediaSession.Callback {
@@ -112,7 +145,7 @@ class RadioPlaybackService : MediaSessionService() {
 
         rotationController = StationRotationController(
             onSwitchTo = { station, reason -> playStation(station, reason) },
-            onMuteChanged = { muted -> player.volume = if (muted) 0f else 1f }
+            onExhausted = { markExhausted() }
         )
 
         serviceScope.launch {
@@ -151,6 +184,30 @@ class RadioPlaybackService : MediaSessionService() {
         player.setMediaItem(mediaItem)
         player.prepare()
         player.play()
+    }
+
+    /**
+     * Called after the rotation controller has hopped through the whole
+     * shortlist several times over without finding music. Pauses playback
+     * outright (rather than muting in place) and flags the current MediaItem's
+     * metadata extras so the UI can show a "no stations available" state —
+     * extras ride along on MediaMetadata, which (unlike raw Metadata events)
+     * is synced across the MediaController boundary.
+     */
+    private fun markExhausted() {
+        player.pause()
+        val currentItem = player.currentMediaItem ?: return
+        val currentIndex = player.currentMediaItemIndex
+        if (currentIndex == androidx.media3.common.C.INDEX_UNSET) return
+        val extras = android.os.Bundle(currentItem.mediaMetadata.extras).apply {
+            putBoolean("noStationsAvailable", true)
+        }
+        player.replaceMediaItem(
+            currentIndex,
+            currentItem.buildUpon()
+                .setMediaMetadata(currentItem.mediaMetadata.buildUpon().setExtras(extras).build())
+                .build()
+        )
     }
 
     /** Called by the UI layer (via a bound-service or session command) when the user reorders/edits the shortlist. */

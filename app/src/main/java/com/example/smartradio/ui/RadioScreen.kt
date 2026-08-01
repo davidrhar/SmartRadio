@@ -34,7 +34,6 @@ import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Radio
 import androidx.compose.material.icons.filled.SkipNext
-import androidx.compose.material.icons.filled.VolumeOff
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -69,7 +68,7 @@ fun RadioScreen(viewModel: RadioViewModel) {
     val currentStationId by viewModel.currentStationId.collectAsState()
     val playbackError by viewModel.playbackError.collectAsState()
     val nowPlayingTrack by viewModel.nowPlayingTrack.collectAsState()
-    val isMuted by viewModel.isMuted.collectAsState()
+    val noStationsAvailable by viewModel.noStationsAvailable.collectAsState()
     val autoSkipEvent by viewModel.autoSkipEvent.collectAsState()
     var showAddDialog by remember { mutableStateOf(false) }
     var localOrder by remember(stations) { mutableStateOf(stations) }
@@ -114,7 +113,7 @@ fun RadioScreen(viewModel: RadioViewModel) {
             NowPlayingHeader(
                 station = currentStation,
                 isPlaying = isPlaying,
-                isMuted = isMuted,
+                noStationsAvailable = noStationsAvailable,
                 playbackError = playbackError,
                 nowPlayingTrack = nowPlayingTrack,
                 onTogglePlay = { viewModel.togglePlayPause() }
@@ -139,13 +138,13 @@ fun RadioScreen(viewModel: RadioViewModel) {
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 itemsIndexed(localOrder, key = { _, station -> station.id }) { index, station ->
-                    val isThisPlaying = station.id == currentStationId
+                    val isSelected = station.id == currentStationId
                     StationCard(
                         station = station,
                         avatarColor = AvatarPalette[index % AvatarPalette.size],
-                        isPlaying = isThisPlaying,
-                        isMuted = isThisPlaying && isMuted,
-                        nowPlayingTrack = if (isThisPlaying) nowPlayingTrack else null,
+                        isSelected = isSelected,
+                        isPlaying = isSelected && isPlaying,
+                        nowPlayingTrack = if (isSelected) nowPlayingTrack else null,
                         canMoveUp = index > 0,
                         canMoveDown = index < localOrder.size - 1,
                         onClick = { viewModel.selectStation(station.id) },
@@ -229,7 +228,7 @@ private fun AutoSkipToast(event: AutoSkipEvent) {
 private fun NowPlayingHeader(
     station: Station?,
     isPlaying: Boolean,
-    isMuted: Boolean,
+    noStationsAvailable: Boolean,
     playbackError: String?,
     nowPlayingTrack: String?,
     onTogglePlay: () -> Unit
@@ -252,16 +251,12 @@ private fun NowPlayingHeader(
                     modifier = Modifier
                         .size(34.dp)
                         .clip(CircleShape)
-                        .background(if (isMuted) MutedAmber else MaterialTheme.colorScheme.primary)
+                        .background(MaterialTheme.colorScheme.primary)
                         .clickable(onClick = onTogglePlay),
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
-                        when {
-                            isMuted -> Icons.Default.VolumeOff
-                            isPlaying -> Icons.Default.Pause
-                            else -> Icons.Default.PlayArrow
-                        },
+                        if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
                         contentDescription = "Play/Pause",
                         tint = Color.White,
                         modifier = Modifier.size(18.dp)
@@ -277,25 +272,25 @@ private fun NowPlayingHeader(
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onBackground
                     )
+                    if (!nowPlayingTrack.isNullOrBlank()) {
+                        Spacer(Modifier.height(2.dp))
+                        Text(
+                            "♪ $nowPlayingTrack",
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            fontSize = 12.5.sp,
+                            fontWeight = FontWeight.Medium,
+                            maxLines = 1,
+                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                        )
+                    }
                     Spacer(Modifier.height(6.dp))
                     Pill(if (station.kind == StationKind.FM_SIMULCAST) "FM simulcast" else "Digital")
                 }
-                Waveform(isPlaying = isPlaying, isMuted = isMuted, modifier = Modifier.height(28.dp).width(84.dp))
+                Waveform(isPlaying = isPlaying, modifier = Modifier.height(28.dp).width(84.dp))
             }
-            if (isMuted) {
+            if (noStationsAvailable) {
                 Spacer(Modifier.height(8.dp))
-                MutedBanner()
-            }
-            if (!nowPlayingTrack.isNullOrBlank()) {
-                Spacer(Modifier.height(6.dp))
-                Text(
-                    "♪ $nowPlayingTrack",
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    fontSize = 12.5.sp,
-                    fontWeight = FontWeight.Medium,
-                    maxLines = 1,
-                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
-                )
+                NoStationsBanner()
             }
             if (playbackError != null) {
                 Spacer(Modifier.height(8.dp))
@@ -316,8 +311,8 @@ private fun NowPlayingHeader(
 }
 
 @Composable
-private fun MutedBanner() {
-    val infiniteTransition = rememberInfiniteTransition(label = "muted-pulse")
+private fun NoStationsBanner() {
+    val infiniteTransition = rememberInfiniteTransition(label = "no-stations-pulse")
     val alpha by infiniteTransition.animateFloat(
         initialValue = 1f,
         targetValue = 0.3f,
@@ -336,16 +331,16 @@ private fun MutedBanner() {
         verticalAlignment = Alignment.CenterVertically
     ) {
         Icon(
-            Icons.Default.VolumeOff,
+            Icons.Default.Radio,
             contentDescription = null,
             tint = MutedAmber,
             modifier = Modifier.size(16.dp).alpha(alpha)
         )
         Spacer(Modifier.width(8.dp))
         Column {
-            Text("MUTED — WAITING FOR MUSIC", color = MutedAmber, fontSize = 10.5.sp, fontWeight = FontWeight.Bold)
+            Text("NO STATIONS AVAILABLE", color = MutedAmber, fontSize = 10.5.sp, fontWeight = FontWeight.Bold)
             Text(
-                "Every station was talk/ads. Listening for music to resume.",
+                "Tried every station three times over — talk, ads, or unreachable. Tap a station below to try again.",
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 fontSize = 9.5.sp
             )
@@ -354,7 +349,7 @@ private fun MutedBanner() {
 }
 
 @Composable
-private fun Waveform(isPlaying: Boolean, isMuted: Boolean = false, modifier: Modifier = Modifier, barCount: Int = 18) {
+private fun Waveform(isPlaying: Boolean, modifier: Modifier = Modifier, barCount: Int = 18) {
     val infiniteTransition = rememberInfiniteTransition(label = "waveform")
     val phase by infiniteTransition.animateFloat(
         initialValue = 0f,
@@ -368,7 +363,7 @@ private fun Waveform(isPlaying: Boolean, isMuted: Boolean = false, modifier: Mod
         horizontalArrangement = Arrangement.spacedBy(2.dp)
     ) {
         repeat(barCount) { i ->
-            val fraction = if (isPlaying && !isMuted) {
+            val fraction = if (isPlaying) {
                 val raw = (kotlin.math.sin(phase + i * 0.6f) + 1f) / 2f
                 0.2f + raw * 0.8f
             } else {
@@ -379,10 +374,10 @@ private fun Waveform(isPlaying: Boolean, isMuted: Boolean = false, modifier: Mod
                     .weight(1f)
                     .fillMaxHeight(fraction)
                     .background(
-                        color = when {
-                            isMuted -> MutedAmber.copy(alpha = 0.6f)
-                            isPlaying -> MaterialTheme.colorScheme.secondary
-                            else -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f)
+                        color = if (isPlaying) {
+                            MaterialTheme.colorScheme.secondary
+                        } else {
+                            MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f)
                         },
                         shape = RoundedCornerShape(2.dp)
                     )
@@ -407,8 +402,8 @@ private fun Pill(text: String) {
 private fun StationCard(
     station: Station,
     avatarColor: Color,
+    isSelected: Boolean,
     isPlaying: Boolean,
-    isMuted: Boolean,
     nowPlayingTrack: String?,
     canMoveUp: Boolean,
     canMoveDown: Boolean,
@@ -417,28 +412,28 @@ private fun StationCard(
     onMoveUp: () -> Unit,
     onMoveDown: () -> Unit
 ) {
-    val accent = if (isMuted) MutedAmber else MaterialTheme.colorScheme.primary
+    val accent = MaterialTheme.colorScheme.primary
 
     Surface(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(18.dp))
             .clickable(onClick = onClick),
-        color = when {
-            isMuted -> MutedAmber.copy(alpha = 0.12f)
-            isPlaying -> MaterialTheme.colorScheme.secondaryContainer
-            else -> MaterialTheme.colorScheme.surface
+        color = if (isSelected) {
+            MaterialTheme.colorScheme.secondaryContainer
+        } else {
+            MaterialTheme.colorScheme.surface
         },
-        tonalElevation = if (isPlaying) 0.dp else 1.dp,
-        shadowElevation = if (isPlaying) 2.dp else 1.dp
+        tonalElevation = if (isSelected) 0.dp else 1.dp,
+        shadowElevation = if (isSelected) 2.dp else 1.dp
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(start = if (isPlaying) 9.dp else 12.dp, top = 10.dp, end = 10.dp, bottom = 10.dp),
+                .padding(start = if (isSelected) 9.dp else 12.dp, top = 10.dp, end = 10.dp, bottom = 10.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            if (isPlaying) {
+            if (isSelected) {
                 Box(
                     modifier = Modifier
                         .width(4.dp)
@@ -476,7 +471,7 @@ private fun StationCard(
                     Text(
                         station.name,
                         fontSize = 13.5.sp,
-                        fontWeight = if (isPlaying) FontWeight.Bold else FontWeight.SemiBold,
+                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.SemiBold,
                         color = MaterialTheme.colorScheme.onSurface,
                         maxLines = 1,
                         overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
@@ -485,9 +480,9 @@ private fun StationCard(
                     Spacer(Modifier.width(6.dp))
                     Pill(if (station.kind == StationKind.FM_SIMULCAST) "FM" else "Digital")
                 }
-                if (isPlaying) {
+                if (isSelected) {
                     Text(
-                        if (isMuted) "MUTED" else "▶ PLAYING",
+                        if (isPlaying) "▶ PLAYING" else "PAUSED",
                         color = accent,
                         fontSize = 9.5.sp,
                         fontWeight = FontWeight.Bold,
