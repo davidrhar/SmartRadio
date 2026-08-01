@@ -4,11 +4,16 @@ import android.Manifest
 import android.app.Activity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -28,11 +33,14 @@ import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Radio
+import androidx.compose.material.icons.filled.SkipNext
+import androidx.compose.material.icons.filled.VolumeOff
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.graphicsLayer
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
@@ -47,8 +55,10 @@ import com.example.smartradio.data.DiscoveredStation
 import com.example.smartradio.data.Station
 import com.example.smartradio.data.StationKind
 import com.example.smartradio.ui.theme.AvatarPalette
+import com.example.smartradio.ui.theme.MutedAmber
 import com.example.smartradio.ui.theme.PillBackground
 import com.example.smartradio.ui.theme.PillText
+import kotlinx.coroutines.delay
 
 @OptIn(ExperimentalMaterial3Api::class)
 @UnstableApi
@@ -59,9 +69,19 @@ fun RadioScreen(viewModel: RadioViewModel) {
     val currentStationId by viewModel.currentStationId.collectAsState()
     val playbackError by viewModel.playbackError.collectAsState()
     val nowPlayingTrack by viewModel.nowPlayingTrack.collectAsState()
+    val isMuted by viewModel.isMuted.collectAsState()
+    val autoSkipEvent by viewModel.autoSkipEvent.collectAsState()
     var showAddDialog by remember { mutableStateOf(false) }
     var localOrder by remember(stations) { mutableStateOf(stations) }
     val currentStation = stations.find { it.id == currentStationId }
+
+    var toastEvent by remember { mutableStateOf<AutoSkipEvent?>(null) }
+    LaunchedEffect(autoSkipEvent) {
+        val event = autoSkipEvent ?: return@LaunchedEffect
+        toastEvent = event
+        delay(3500)
+        if (toastEvent?.id == event.id) toastEvent = null
+    }
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
@@ -83,20 +103,35 @@ fun RadioScreen(viewModel: RadioViewModel) {
         }
     ) { padding ->
         Column(modifier = Modifier.padding(padding).fillMaxSize()) {
+            AnimatedVisibility(
+                visible = toastEvent != null,
+                enter = slideInVertically(initialOffsetY = { -it }) + fadeIn(),
+                exit = slideOutVertically(targetOffsetY = { -it }) + fadeOut()
+            ) {
+                toastEvent?.let { AutoSkipToast(it) }
+            }
+
             NowPlayingHeader(
                 station = currentStation,
                 isPlaying = isPlaying,
+                isMuted = isMuted,
                 playbackError = playbackError,
                 nowPlayingTrack = nowPlayingTrack,
                 onTogglePlay = { viewModel.togglePlayPause() }
             )
 
-            Text(
-                text = "Set preference order with the arrows below. Auto-skips ads/talk.",
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                fontSize = 12.sp,
-                modifier = Modifier.padding(horizontal = 20.dp, vertical = 6.dp)
-            )
+            Column(modifier = Modifier.padding(horizontal = 20.dp, vertical = 6.dp)) {
+                Text(
+                    text = "Set preference order with the arrows below.",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    fontSize = 12.sp
+                )
+                Text(
+                    text = "Auto-skips ads/talk.",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    fontSize = 12.sp
+                )
+            }
 
             LazyColumn(
                 modifier = Modifier.weight(1f),
@@ -104,10 +139,13 @@ fun RadioScreen(viewModel: RadioViewModel) {
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 itemsIndexed(localOrder, key = { _, station -> station.id }) { index, station ->
+                    val isThisPlaying = station.id == currentStationId
                     StationCard(
                         station = station,
                         avatarColor = AvatarPalette[index % AvatarPalette.size],
-                        isPlaying = station.id == currentStationId,
+                        isPlaying = isThisPlaying,
+                        isMuted = isThisPlaying && isMuted,
+                        nowPlayingTrack = if (isThisPlaying) nowPlayingTrack else null,
                         canMoveUp = index > 0,
                         canMoveDown = index < localOrder.size - 1,
                         onClick = { viewModel.selectStation(station.id) },
@@ -146,9 +184,52 @@ fun RadioScreen(viewModel: RadioViewModel) {
 }
 
 @Composable
+private fun AutoSkipToast(event: AutoSkipEvent) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 20.dp, vertical = 6.dp)
+            .clip(RoundedCornerShape(14.dp))
+            .background(PillBackground)
+            .padding(12.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Box(
+            modifier = Modifier.size(26.dp).clip(CircleShape)
+                .background(MaterialTheme.colorScheme.secondary.copy(alpha = 0.2f)),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                Icons.Default.SkipNext,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.secondary,
+                modifier = Modifier.size(15.dp)
+            )
+        }
+        Spacer(Modifier.width(9.dp))
+        Column {
+            Text(
+                "Skipped ${event.fromStationName} — talk detected",
+                color = Color.White,
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Bold
+            )
+            if (event.toStationName.isNotBlank()) {
+                Text(
+                    "Switched to ${event.toStationName}",
+                    color = Color(0xFFA9AEC2),
+                    fontSize = 9.5.sp
+                )
+            }
+        }
+    }
+}
+
+@Composable
 private fun NowPlayingHeader(
     station: Station?,
     isPlaying: Boolean,
+    isMuted: Boolean,
     playbackError: String?,
     nowPlayingTrack: String?,
     onTogglePlay: () -> Unit
@@ -171,12 +252,16 @@ private fun NowPlayingHeader(
                     modifier = Modifier
                         .size(34.dp)
                         .clip(CircleShape)
-                        .background(MaterialTheme.colorScheme.primary)
+                        .background(if (isMuted) MutedAmber else MaterialTheme.colorScheme.primary)
                         .clickable(onClick = onTogglePlay),
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
-                        if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                        when {
+                            isMuted -> Icons.Default.VolumeOff
+                            isPlaying -> Icons.Default.Pause
+                            else -> Icons.Default.PlayArrow
+                        },
                         contentDescription = "Play/Pause",
                         tint = Color.White,
                         modifier = Modifier.size(18.dp)
@@ -195,7 +280,11 @@ private fun NowPlayingHeader(
                     Spacer(Modifier.height(6.dp))
                     Pill(if (station.kind == StationKind.FM_SIMULCAST) "FM simulcast" else "Digital")
                 }
-                Waveform(isPlaying = isPlaying, modifier = Modifier.height(28.dp).width(84.dp))
+                Waveform(isPlaying = isPlaying, isMuted = isMuted, modifier = Modifier.height(28.dp).width(84.dp))
+            }
+            if (isMuted) {
+                Spacer(Modifier.height(8.dp))
+                MutedBanner()
             }
             if (!nowPlayingTrack.isNullOrBlank()) {
                 Spacer(Modifier.height(6.dp))
@@ -227,7 +316,48 @@ private fun NowPlayingHeader(
 }
 
 @Composable
-private fun Waveform(isPlaying: Boolean, modifier: Modifier = Modifier, barCount: Int = 18) {
+private fun MutedBanner() {
+    val infiniteTransition = rememberInfiniteTransition(label = "muted-pulse")
+    val alpha by infiniteTransition.animateFloat(
+        initialValue = 1f,
+        targetValue = 0.3f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(900, easing = LinearEasing),
+            repeatMode = androidx.compose.animation.core.RepeatMode.Reverse
+        ),
+        label = "alpha"
+    )
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .background(MutedAmber.copy(alpha = 0.14f))
+            .padding(10.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(
+            Icons.Default.VolumeOff,
+            contentDescription = null,
+            tint = MutedAmber,
+            modifier = Modifier.size(16.dp).graphicsLayerAlpha(alpha)
+        )
+        Spacer(Modifier.width(8.dp))
+        Column {
+            Text("MUTED — WAITING FOR MUSIC", color = MutedAmber, fontSize = 10.5.sp, fontWeight = FontWeight.Bold)
+            Text(
+                "Every station was talk/ads. Listening for music to resume.",
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                fontSize = 9.5.sp
+            )
+        }
+    }
+}
+
+private fun Modifier.graphicsLayerAlpha(alpha: Float): Modifier =
+    this.then(Modifier.graphicsLayer(alpha = alpha))
+
+@Composable
+private fun Waveform(isPlaying: Boolean, isMuted: Boolean = false, modifier: Modifier = Modifier, barCount: Int = 18) {
     val infiniteTransition = rememberInfiniteTransition(label = "waveform")
     val phase by infiniteTransition.animateFloat(
         initialValue = 0f,
@@ -241,7 +371,7 @@ private fun Waveform(isPlaying: Boolean, modifier: Modifier = Modifier, barCount
         horizontalArrangement = Arrangement.spacedBy(2.dp)
     ) {
         repeat(barCount) { i ->
-            val fraction = if (isPlaying) {
+            val fraction = if (isPlaying && !isMuted) {
                 val raw = (kotlin.math.sin(phase + i * 0.6f) + 1f) / 2f
                 0.2f + raw * 0.8f
             } else {
@@ -252,10 +382,10 @@ private fun Waveform(isPlaying: Boolean, modifier: Modifier = Modifier, barCount
                     .weight(1f)
                     .fillMaxHeight(fraction)
                     .background(
-                        color = if (isPlaying) {
-                            MaterialTheme.colorScheme.secondary
-                        } else {
-                            MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f)
+                        color = when {
+                            isMuted -> MutedAmber.copy(alpha = 0.6f)
+                            isPlaying -> MaterialTheme.colorScheme.secondary
+                            else -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f)
                         },
                         shape = RoundedCornerShape(2.dp)
                     )
@@ -281,6 +411,8 @@ private fun StationCard(
     station: Station,
     avatarColor: Color,
     isPlaying: Boolean,
+    isMuted: Boolean,
+    nowPlayingTrack: String?,
     canMoveUp: Boolean,
     canMoveDown: Boolean,
     onClick: () -> Unit,
@@ -288,55 +420,136 @@ private fun StationCard(
     onMoveUp: () -> Unit,
     onMoveDown: () -> Unit
 ) {
+    val accent = if (isMuted) MutedAmber else MaterialTheme.colorScheme.primary
+
     Surface(
-        modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).clickable(onClick = onClick),
-        color = if (isPlaying) {
-            MaterialTheme.colorScheme.secondaryContainer
-        } else {
-            MaterialTheme.colorScheme.surface
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(18.dp))
+            .clickable(onClick = onClick),
+        color = when {
+            isMuted -> MutedAmber.copy(alpha = 0.12f)
+            isPlaying -> MaterialTheme.colorScheme.secondaryContainer
+            else -> MaterialTheme.colorScheme.surface
         },
         tonalElevation = if (isPlaying) 0.dp else 1.dp,
-        shadowElevation = 1.dp
+        shadowElevation = if (isPlaying) 2.dp else 1.dp
     ) {
         Row(
-            modifier = Modifier.fillMaxWidth().padding(12.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(start = if (isPlaying) 9.dp else 12.dp, top = 10.dp, end = 10.dp, bottom = 10.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
+            if (isPlaying) {
+                Box(
+                    modifier = Modifier
+                        .width(4.dp)
+                        .height(52.dp)
+                        .clip(RoundedCornerShape(2.dp))
+                        .background(accent)
+                )
+                Spacer(Modifier.width(9.dp))
+            }
+
             Box(
-                modifier = Modifier.size(46.dp).clip(RoundedCornerShape(14.dp)).background(avatarColor),
+                modifier = Modifier.size(44.dp).clip(RoundedCornerShape(13.dp)).background(avatarColor),
                 contentAlignment = Alignment.Center
             ) {
-                Icon(
-                    imageVector = if (station.kind == StationKind.FM_SIMULCAST) Icons.Default.Radio else Icons.Default.MusicNote,
-                    contentDescription = null,
-                    tint = Color.White
-                )
+                if (station.favicon.isNotBlank()) {
+                    AsyncImage(
+                        model = station.favicon,
+                        contentDescription = null,
+                        modifier = Modifier.fillMaxSize().clip(RoundedCornerShape(13.dp)),
+                        contentScale = ContentScale.Crop
+                    )
+                } else {
+                    Icon(
+                        imageVector = if (station.kind == StationKind.FM_SIMULCAST) Icons.Default.Radio else Icons.Default.MusicNote,
+                        contentDescription = null,
+                        tint = Color.White
+                    )
+                }
             }
 
-            Spacer(Modifier.width(12.dp))
+            Spacer(Modifier.width(10.dp))
 
             Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    station.name,
-                    fontSize = 15.sp,
-                    fontWeight = if (isPlaying) FontWeight.Bold else FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-                Spacer(Modifier.height(5.dp))
-                Pill(if (station.kind == StationKind.FM_SIMULCAST) "FM" else "Digital")
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        station.name,
+                        fontSize = 13.5.sp,
+                        fontWeight = if (isPlaying) FontWeight.Bold else FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        maxLines = 1,
+                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f, fill = false)
+                    )
+                    Spacer(Modifier.width(6.dp))
+                    Pill(if (station.kind == StationKind.FM_SIMULCAST) "FM" else "Digital")
+                }
+                if (isPlaying) {
+                    Text(
+                        if (isMuted) "MUTED" else "▶ PLAYING",
+                        color = accent,
+                        fontSize = 9.5.sp,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.padding(top = 2.dp)
+                    )
+                }
+                val metaParts = buildList {
+                    val quality = station.qualitySummary()
+                    if (quality.isNotBlank()) add(quality)
+                    station.primaryLanguage()?.let { add("($it)") }
+                    val location = station.locationSummary()
+                    if (location.isNotBlank()) add(location)
+                }
+                if (metaParts.isNotEmpty()) {
+                    Text(
+                        metaParts.joinToString(" · "),
+                        fontSize = 10.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                        modifier = Modifier.padding(top = 2.dp)
+                    )
+                }
+                if (!nowPlayingTrack.isNullOrBlank()) {
+                    Text(
+                        "♪ $nowPlayingTrack",
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.primary,
+                        maxLines = 1,
+                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                        modifier = Modifier.padding(top = 2.dp)
+                    )
+                }
             }
 
-            Spacer(Modifier.width(4.dp))
+            Spacer(Modifier.width(6.dp))
 
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                CircleActionButton(icon = Icons.Default.KeyboardArrowUp, enabled = canMoveUp, filled = true, onClick = onMoveUp)
-                Spacer(Modifier.height(6.dp))
-                CircleActionButton(icon = Icons.Default.KeyboardArrowDown, enabled = canMoveDown, filled = true, onClick = onMoveDown)
+            Column(horizontalAlignment = Alignment.End) {
+                if (station.clickCount > 0) {
+                    Text(
+                        formatPlayCount(station.clickCount),
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                    Text("plays", fontSize = 7.5.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Spacer(Modifier.height(4.dp))
+                }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        CircleActionButton(icon = Icons.Default.KeyboardArrowUp, enabled = canMoveUp, filled = true, onClick = onMoveUp)
+                        Spacer(Modifier.height(5.dp))
+                        CircleActionButton(icon = Icons.Default.KeyboardArrowDown, enabled = canMoveDown, filled = true, onClick = onMoveDown)
+                    }
+                    Spacer(Modifier.width(6.dp))
+                    CircleActionButton(icon = Icons.Default.Close, enabled = true, filled = false, onClick = onRemove)
+                }
             }
-
-            Spacer(Modifier.width(8.dp))
-
-            CircleActionButton(icon = Icons.Default.Close, enabled = true, filled = false, onClick = onRemove)
         }
     }
 }

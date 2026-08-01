@@ -23,6 +23,9 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import java.util.Locale
 
+/** A one-off event describing an automatic ad/talk skip, for a transient toast in the UI. */
+data class AutoSkipEvent(val id: Long, val fromStationName: String, val toStationName: String)
+
 @UnstableApi
 class RadioViewModel(application: Application) : AndroidViewModel(application) {
 
@@ -43,6 +46,14 @@ class RadioViewModel(application: Application) : AndroidViewModel(application) {
 
     private val _nowPlayingTrack = MutableStateFlow<String?>(null)
     val nowPlayingTrack: StateFlow<String?> = _nowPlayingTrack.asStateFlow()
+
+    // True when the rotation controller has muted in place after a full lap
+    // found no music anywhere — distinct from a user-initiated pause.
+    private val _isMuted = MutableStateFlow(false)
+    val isMuted: StateFlow<Boolean> = _isMuted.asStateFlow()
+
+    private val _autoSkipEvent = MutableStateFlow<AutoSkipEvent?>(null)
+    val autoSkipEvent: StateFlow<AutoSkipEvent?> = _autoSkipEvent.asStateFlow()
 
     private val _searchResults = MutableStateFlow<List<DiscoveredStation>>(emptyList())
     val searchResults: StateFlow<List<DiscoveredStation>> = _searchResults.asStateFlow()
@@ -107,9 +118,22 @@ class RadioViewModel(application: Application) : AndroidViewModel(application) {
                 ) {
                     _currentStationId.value = mediaItem?.mediaId
                     _nowPlayingTrack.value = null
+                    val autoSkipFrom = mediaItem?.mediaMetadata?.extras?.getString("autoSkipFrom")
+                    if (!autoSkipFrom.isNullOrBlank()) {
+                        _autoSkipEvent.value = AutoSkipEvent(
+                            id = System.currentTimeMillis(),
+                            fromStationName = autoSkipFrom,
+                            toStationName = mediaItem?.mediaMetadata?.title?.toString() ?: ""
+                        )
+                    }
                 }
                 override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
                     _playbackError.value = error.message ?: error.errorCodeName
+                }
+                override fun onVolumeChanged(volume: Float) {
+                    // The rotation controller mutes in place (volume 0) rather than pausing
+                    // when a full lap of the shortlist turns up no music anywhere.
+                    _isMuted.value = volume <= 0f
                 }
                 override fun onMetadata(metadata: androidx.media3.common.Metadata) {
                     // ICY (Shoutcast/Icecast) streams embed a live "now playing" title
@@ -137,14 +161,36 @@ class RadioViewModel(application: Application) : AndroidViewModel(application) {
             return
         }
         viewModelScope.launch {
-            repository.addStation(station.name, station.streamUrl, station.guessedKind())
+            repository.addStation(
+                name = station.name,
+                streamUrl = station.streamUrl,
+                kind = station.guessedKind(),
+                favicon = station.favicon,
+                codec = station.codec,
+                bitrate = station.bitrate,
+                language = station.language,
+                country = station.country,
+                state = station.state,
+                clickCount = station.clickCount
+            )
         }
     }
 
     fun confirmAddPendingStation() {
         val station = _pendingRiskyStation.value ?: return
         viewModelScope.launch {
-            repository.addStation(station.name, station.streamUrl, station.guessedKind())
+            repository.addStation(
+                name = station.name,
+                streamUrl = station.streamUrl,
+                kind = station.guessedKind(),
+                favicon = station.favicon,
+                codec = station.codec,
+                bitrate = station.bitrate,
+                language = station.language,
+                country = station.country,
+                state = station.state,
+                clickCount = station.clickCount
+            )
         }
         _pendingRiskyStation.value = null
     }

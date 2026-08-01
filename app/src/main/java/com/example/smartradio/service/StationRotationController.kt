@@ -3,6 +3,16 @@ package com.example.smartradio.service
 import com.example.smartradio.audio.ListeningState
 import com.example.smartradio.data.Station
 
+/** Why the rotation controller is switching to a given station. */
+sealed class SwitchReason {
+    /** The user tapped a station directly. */
+    object UserSelected : SwitchReason()
+    /** The preference list changed (e.g. the playing station was removed). */
+    object ListChanged : SwitchReason()
+    /** Sustained non-music triggered an automatic skip away from [fromStationName]. */
+    data class AutoSkipped(val fromStationName: String) : SwitchReason()
+}
+
 /**
  * Implements the requested behavior:
  *  - Stations are tried in preference order.
@@ -13,7 +23,7 @@ import com.example.smartradio.data.Station
  *    (and keeps being classified) silently until music resumes there.
  */
 class StationRotationController(
-    private val onSwitchTo: (Station) -> Unit,
+    private val onSwitchTo: (Station, SwitchReason) -> Unit,
     private val onMuteChanged: (Boolean) -> Unit
 ) {
     private var shortlist: List<Station> = emptyList()
@@ -55,7 +65,7 @@ class StationRotationController(
                 // The station being listened to was removed — keep the radio
                 // going with the top preference instead of going silent.
                 setMuted(false)
-                onSwitchTo(stations[0])
+                onSwitchTo(stations[0], SwitchReason.ListChanged)
             }
         }
     }
@@ -87,10 +97,11 @@ class StationRotationController(
         currentIndex = index
         stationsTriedThisCycle = 0
         setMuted(false)
-        onSwitchTo(shortlist[currentIndex])
+        onSwitchTo(shortlist[currentIndex], SwitchReason.UserSelected)
     }
 
     private fun advanceToNextStation() {
+        val previousStation = shortlist[currentIndex]
         stationsTriedThisCycle++
         if (stationsTriedThisCycle >= shortlist.size) {
             // Completed a full lap and every station was non-music. Stop
@@ -101,7 +112,7 @@ class StationRotationController(
             return
         }
         currentIndex = (currentIndex + 1) % shortlist.size
-        onSwitchTo(shortlist[currentIndex])
+        onSwitchTo(shortlist[currentIndex], SwitchReason.AutoSkipped(previousStation.name))
     }
 
     private fun setMuted(value: Boolean) {

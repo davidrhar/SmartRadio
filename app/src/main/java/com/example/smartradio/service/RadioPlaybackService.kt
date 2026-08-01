@@ -111,7 +111,7 @@ class RadioPlaybackService : MediaSessionService() {
             .build()
 
         rotationController = StationRotationController(
-            onSwitchTo = { station -> playStation(station) },
+            onSwitchTo = { station, reason -> playStation(station, reason) },
             onMuteChanged = { muted -> player.volume = if (muted) 0f else 1f }
         )
 
@@ -132,14 +132,19 @@ class RadioPlaybackService : MediaSessionService() {
         }
     }
 
-    private fun playStation(station: Station) {
+    private fun playStation(station: Station, reason: SwitchReason) {
         detectionEngine.reset()
+        val extras = android.os.Bundle()
+        if (reason is SwitchReason.AutoSkipped) {
+            extras.putString("autoSkipFrom", reason.fromStationName)
+        }
         val mediaItem = MediaItem.Builder()
             .setUri(station.streamUrl)
             .setMediaId(station.id)
             .setMediaMetadata(
                 androidx.media3.common.MediaMetadata.Builder()
                     .setTitle(station.name)
+                    .setExtras(extras)
                     .build()
             )
             .build()

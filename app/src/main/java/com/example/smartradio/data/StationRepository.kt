@@ -51,14 +51,32 @@ class StationRepository(context: Context) {
         prefs.edit().putString(STATIONS_KEY, json.encodeToString(reindexed)).apply()
     }
 
-    suspend fun addStation(name: String, streamUrl: String, kind: StationKind) {
+    suspend fun addStation(
+        name: String,
+        streamUrl: String,
+        kind: StationKind,
+        favicon: String = "",
+        codec: String = "",
+        bitrate: Int = 0,
+        language: String = "",
+        country: String = "",
+        state: String = "",
+        clickCount: Int = 0
+    ) {
         val current = readStations()
         val newStation = Station(
             id = java.util.UUID.randomUUID().toString(),
             name = name,
             streamUrl = streamUrl,
             kind = kind,
-            preferenceOrder = current.size
+            preferenceOrder = current.size,
+            favicon = favicon,
+            codec = codec,
+            bitrate = bitrate,
+            language = language,
+            country = country,
+            state = state,
+            clickCount = clickCount
         )
         saveAll(current + newStation)
     }

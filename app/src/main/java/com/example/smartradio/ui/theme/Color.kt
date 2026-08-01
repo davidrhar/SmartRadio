@@ -7,6 +7,10 @@ val TealPrimary = Color(0xFF12938E)
 val MintAccent = Color(0xFF4DE8D4)
 val NavyDark = Color(0xFF1B1F33)
 
+// "Muted, waiting for music" state — deliberately distinct from teal/mint
+// (which mean "playing") so the two states can never be confused for each other.
+val MutedAmber = Color(0xFFB8720A)
+
 // Light theme surfaces
 val BackgroundLight = Color(0xFFF7F8FA)
 val SurfaceLight = Color(0xFFFFFFFF)
