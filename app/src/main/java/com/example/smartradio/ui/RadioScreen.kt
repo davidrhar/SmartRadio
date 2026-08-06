@@ -95,7 +95,7 @@ fun RadioScreen(viewModel: RadioViewModel) {
                     Image(
                         painter = painterResource(R.drawable.skipadoodle_wordmark),
                         contentDescription = "Skipadoodle",
-                        modifier = Modifier.height(34.dp),
+                        modifier = Modifier.fillMaxHeight().padding(vertical = 10.dp),
                         contentScale = ContentScale.Fit,
                         alignment = Alignment.CenterStart
                     )
