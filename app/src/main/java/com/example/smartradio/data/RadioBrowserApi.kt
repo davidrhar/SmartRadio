@@ -15,6 +15,7 @@ import java.util.concurrent.TimeUnit
 
 @Serializable
 data class DiscoveredStation(
+    @SerialName("stationuuid") val stationUuid: String = "",
     @SerialName("name") val name: String,
     @SerialName("url_resolved") val streamUrl: String,
     @SerialName("countrycode") val countryCode: String = "",
@@ -29,9 +30,17 @@ data class DiscoveredStation(
     @SerialName("favicon") val favicon: String = "",
     @SerialName("lastcheckok") val lastCheckOk: Int = 1
 ) {
-    /** Best-effort guess — Radio Browser doesn't cleanly separate "FM simulcast" vs. pure digital. */
-    fun guessedKind(): StationKind =
-        if (tags.contains("fm", ignoreCase = true)) StationKind.FM_SIMULCAST else StationKind.DIGITAL
+    /**
+     * Best-effort guess — Radio Browser doesn't cleanly separate "FM simulcast"/"AM simulcast"
+     * vs. pure digital. The "am" tag is checked as an exact tag match rather than substring
+     * (unlike "fm"): "am" is a common substring of unrelated words, so a loose contains() check
+     * would misfire far more often than it does for "fm".
+     */
+    fun guessedKind(): StationKind = when {
+        tags.contains("fm", ignoreCase = true) -> StationKind.FM_SIMULCAST
+        tags.split(",").map { it.trim() }.any { it.equals("am", ignoreCase = true) } -> StationKind.AM_SIMULCAST
+        else -> StationKind.DIGITAL
+    }
 
     /** "MP3 128kbps" style summary, blank if the directory has no data for this station. */
     fun qualitySummary(): String {

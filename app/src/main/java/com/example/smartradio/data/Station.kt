@@ -5,6 +5,8 @@ import kotlinx.serialization.Serializable
 enum class StationKind {
     /** An FM station's internet simulcast stream (phones have no FM tuner chip). */
     FM_SIMULCAST,
+    /** An AM station's internet simulcast stream (phones have no AM tuner chip either). */
+    AM_SIMULCAST,
     /** An internet-only or DAB+ digital station, accessed as a stream URL. */
     DIGITAL
 }
@@ -26,6 +28,7 @@ data class Station(
     val bitrate: Int = 0,
     val language: String = "",
     val country: String = "",
+    val countryCode: String = "",
     val state: String = "",
     val clickCount: Int = 0
 ) {

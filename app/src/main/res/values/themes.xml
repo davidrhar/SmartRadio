@@ -1,3 +1,8 @@
 <resources xmlns:tools="http://schemas.android.com/tools">
     <style name="Theme.SmartRadio" parent="android:Theme.Material.Light.NoActionBar" />
+
+    <!-- Accent color for Android Auto's UI chrome (transport buttons, progress bar, etc). -->
+    <style name="Theme.SmartRadio.Car" parent="Theme.SmartRadio">
+        <item name="android:colorAccent">#FF12938E</item>
+    </style>
 </resources>

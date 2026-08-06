@@ -1,0 +1,22 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Monochrome flattening of ic_launcher_foreground's equalizer glyph.
+         Android Auto tints this itself (light/dark theme), so it must be a
+         single opaque fill/stroke color, not the launcher icon's gradient. -->
+    <path
+        android:fillColor="#FF000000"
+        android:pathData="M30,54 h9 v24 h-9 z" />
+    <path
+        android:fillColor="#FF000000"
+        android:pathData="M45,30 h9 v48 h-9 z" />
+    <path
+        android:strokeColor="#FF000000"
+        android:strokeWidth="5"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:fillColor="#00000000"
+        android:pathData="M22,64 L40,64 L50,74 L60,32 L70,64 L86,64" />
+</vector>

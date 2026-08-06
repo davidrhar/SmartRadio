@@ -168,6 +168,7 @@ class RadioViewModel(application: Application) : AndroidViewModel(application) {
                 bitrate = station.bitrate,
                 language = station.language,
                 country = station.country,
+                countryCode = station.countryCode,
                 state = station.state,
                 clickCount = station.clickCount
             )
@@ -186,6 +187,7 @@ class RadioViewModel(application: Application) : AndroidViewModel(application) {
                 bitrate = station.bitrate,
                 language = station.language,
                 country = station.country,
+                countryCode = station.countryCode,
                 state = station.state,
                 clickCount = station.clickCount
             )

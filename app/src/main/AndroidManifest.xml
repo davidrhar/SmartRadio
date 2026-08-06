@@ -19,6 +19,17 @@
         android:usesCleartextTraffic="true"
         android:supportsRtl="true">
 
+        <!-- Declares this app to Android Auto (phone-projection) as a media app. -->
+        <meta-data
+            android:name="com.google.android.gms.car.application"
+            android:resource="@xml/automotive_app_desc" />
+        <meta-data
+            android:name="androidx.car.app.TintableAttributionIcon"
+            android:resource="@drawable/ic_auto_attribution" />
+        <meta-data
+            android:name="com.google.android.gms.car.application.theme"
+            android:resource="@style/Theme.SmartRadio.Car" />
+
         <activity
             android:name=".MainActivity"
             android:exported="true"
@@ -32,10 +43,11 @@
 
         <service
             android:name=".service.RadioPlaybackService"
-            android:exported="false"
+            android:exported="true"
             android:foregroundServiceType="mediaPlayback">
             <intent-filter>
-                <action android:name="androidx.media3.session.MediaSessionService" />
+                <action android:name="androidx.media3.session.MediaLibraryService" />
+                <action android:name="android.media.browse.MediaBrowserService" />
             </intent-filter>
         </service>
 

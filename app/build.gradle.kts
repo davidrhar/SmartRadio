@@ -124,6 +124,10 @@ dependencies {
     implementation("androidx.media3:media3-session:1.4.0")
     implementation("androidx.media3:media3-common:1.4.0")
 
+    // MediaConstants (content-style browse hints) for Android Auto's station list —
+    // this is the artifact Google's own Auto docs use for it, even post-media3.
+    implementation("androidx.media:media:1.8.0")
+
     // On-device audio scene classification (speech vs. music) via YAMNet.
     // Using LiteRT (Google's official successor to classic TensorFlow Lite)
     // instead of org.tensorflow:tensorflow-lite: the classic artifact's

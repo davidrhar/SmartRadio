@@ -108,6 +108,32 @@ class StationRotationController(
         onSwitchTo(shortlist[currentIndex], SwitchReason.UserSelected)
     }
 
+    /**
+     * User-driven skip to the next/previous station in the shortlist (e.g. Android Auto's
+     * standard transport buttons). Deliberately separate from [advanceToNextStation], which is
+     * coupled to the auto-skip/exhaustion state machine — a deliberate skip should always work
+     * and always reset that tracking, exactly like [selectStation].
+     */
+    fun skipToNext() {
+        if (shortlist.isEmpty()) return
+        playbackStarted = true
+        currentIndex = (currentIndex + 1) % shortlist.size
+        stationsTriedThisCycle = 0
+        lapsCompleted = 0
+        exhausted = false
+        onSwitchTo(shortlist[currentIndex], SwitchReason.UserSelected)
+    }
+
+    fun skipToPrevious() {
+        if (shortlist.isEmpty()) return
+        playbackStarted = true
+        currentIndex = (currentIndex - 1 + shortlist.size) % shortlist.size
+        stationsTriedThisCycle = 0
+        lapsCompleted = 0
+        exhausted = false
+        onSwitchTo(shortlist[currentIndex], SwitchReason.UserSelected)
+    }
+
     private fun advanceToNextStation() {
         val previousStation = shortlist[currentIndex]
         stationsTriedThisCycle++

@@ -14,6 +14,7 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -33,6 +34,7 @@ import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Radio
+import androidx.compose.material.icons.automirrored.filled.TrendingUp
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -44,12 +46,15 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.app.ActivityCompat
 import androidx.media3.common.util.UnstableApi
 import coil3.compose.AsyncImage
+import com.example.smartradio.R
 import com.example.smartradio.data.DiscoveredStation
 import com.example.smartradio.data.Station
 import com.example.smartradio.data.StationKind
@@ -86,7 +91,15 @@ fun RadioScreen(viewModel: RadioViewModel) {
         containerColor = MaterialTheme.colorScheme.background,
         topBar = {
             TopAppBar(
-                title = { Text("Skipadoodle", fontWeight = FontWeight.Bold) },
+                title = {
+                    Image(
+                        painter = painterResource(R.drawable.skipadoodle_wordmark),
+                        contentDescription = "Skipadoodle",
+                        modifier = Modifier.height(34.dp),
+                        contentScale = ContentScale.Fit,
+                        alignment = Alignment.CenterStart
+                    )
+                },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.background
                 )
@@ -132,36 +145,43 @@ fun RadioScreen(viewModel: RadioViewModel) {
                 )
             }
 
-            LazyColumn(
-                modifier = Modifier.weight(1f),
-                contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 88.dp),
-                verticalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                itemsIndexed(localOrder, key = { _, station -> station.id }) { index, station ->
-                    val isSelected = station.id == currentStationId
-                    StationCard(
-                        station = station,
-                        avatarColor = AvatarPalette[index % AvatarPalette.size],
-                        isSelected = isSelected,
-                        isPlaying = isSelected && isPlaying,
-                        nowPlayingTrack = if (isSelected) nowPlayingTrack else null,
-                        canMoveUp = index > 0,
-                        canMoveDown = index < localOrder.size - 1,
-                        onClick = { viewModel.selectStation(station.id) },
-                        onRemove = { viewModel.removeStation(station.id) },
-                        onMoveUp = {
-                            localOrder = localOrder.toMutableList().apply {
-                                add(index - 1, removeAt(index))
+            if (localOrder.isEmpty()) {
+                EmptyStationsPlaceholder(
+                    onAddStation = { showAddDialog = true },
+                    modifier = Modifier.weight(1f)
+                )
+            } else {
+                LazyColumn(
+                    modifier = Modifier.weight(1f),
+                    contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 88.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    itemsIndexed(localOrder, key = { _, station -> station.id }) { index, station ->
+                        val isSelected = station.id == currentStationId
+                        StationCard(
+                            station = station,
+                            avatarColor = AvatarPalette[index % AvatarPalette.size],
+                            isSelected = isSelected,
+                            isPlaying = isSelected && isPlaying,
+                            nowPlayingTrack = if (isSelected) nowPlayingTrack else null,
+                            canMoveUp = index > 0,
+                            canMoveDown = index < localOrder.size - 1,
+                            onClick = { viewModel.selectStation(station.id) },
+                            onRemove = { viewModel.removeStation(station.id) },
+                            onMoveUp = {
+                                localOrder = localOrder.toMutableList().apply {
+                                    add(index - 1, removeAt(index))
+                                }
+                                viewModel.reorder(localOrder.map { it.id })
+                            },
+                            onMoveDown = {
+                                localOrder = localOrder.toMutableList().apply {
+                                    add(index + 1, removeAt(index))
+                                }
+                                viewModel.reorder(localOrder.map { it.id })
                             }
-                            viewModel.reorder(localOrder.map { it.id })
-                        },
-                        onMoveDown = {
-                            localOrder = localOrder.toMutableList().apply {
-                                add(index + 1, removeAt(index))
-                            }
-                            viewModel.reorder(localOrder.map { it.id })
-                        }
-                    )
+                        )
+                    }
                 }
             }
         }
@@ -179,6 +199,43 @@ fun RadioScreen(viewModel: RadioViewModel) {
                 showAddDialog = false
             }
         )
+    }
+}
+
+@Composable
+private fun EmptyStationsPlaceholder(onAddStation: () -> Unit, modifier: Modifier = Modifier) {
+    Column(
+        modifier = modifier.fillMaxWidth().padding(horizontal = 36.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        Icon(
+            imageVector = Icons.Default.Radio,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.size(56.dp)
+        )
+        Spacer(Modifier.height(16.dp))
+        Text(
+            "No stations yet",
+            fontSize = 18.sp,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.onBackground,
+            textAlign = TextAlign.Center
+        )
+        Spacer(Modifier.height(6.dp))
+        Text(
+            "Search the directory or add a stream URL manually to start listening.",
+            fontSize = 13.sp,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center
+        )
+        Spacer(Modifier.height(20.dp))
+        Button(onClick = onAddStation) {
+            Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(18.dp))
+            Spacer(Modifier.width(6.dp))
+            Text("Add a station")
+        }
     }
 }
 
@@ -279,12 +336,12 @@ private fun NowPlayingHeader(
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             fontSize = 12.5.sp,
                             fontWeight = FontWeight.Medium,
-                            maxLines = 1,
+                            maxLines = 2,
                             overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
                         )
                     }
                     Spacer(Modifier.height(6.dp))
-                    Pill(if (station.kind == StationKind.FM_SIMULCAST) "FM simulcast" else "Digital")
+                    Pill(station.kind.pillLabel())
                 }
                 Waveform(isPlaying = isPlaying, modifier = Modifier.height(28.dp).width(84.dp))
             }
@@ -418,6 +475,7 @@ private fun StationCard(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(18.dp))
+            .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(18.dp))
             .clickable(onClick = onClick),
         color = if (isSelected) {
             MaterialTheme.colorScheme.secondaryContainer
@@ -457,7 +515,7 @@ private fun StationCard(
                     )
                 } else {
                     Icon(
-                        imageVector = if (station.kind == StationKind.FM_SIMULCAST) Icons.Default.Radio else Icons.Default.MusicNote,
+                        imageVector = station.kind.icon(),
                         contentDescription = null,
                         tint = Color.White
                     )
@@ -478,7 +536,7 @@ private fun StationCard(
                         modifier = Modifier.weight(1f, fill = false)
                     )
                     Spacer(Modifier.width(6.dp))
-                    Pill(if (station.kind == StationKind.FM_SIMULCAST) "FM" else "Digital")
+                    Pill(station.kind.pillLabel(short = true))
                 }
                 if (isSelected) {
                     Text(
@@ -501,7 +559,7 @@ private fun StationCard(
                         metaParts.joinToString(" · "),
                         fontSize = 10.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 1,
+                        maxLines = 2,
                         overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
                         modifier = Modifier.padding(top = 2.dp)
                     )
@@ -523,13 +581,12 @@ private fun StationCard(
 
             Column(horizontalAlignment = Alignment.End) {
                 if (station.clickCount > 0) {
-                    Text(
-                        formatPlayCount(station.clickCount),
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.primary
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.TrendingUp,
+                        contentDescription = "Popular station",
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(16.dp)
                     )
-                    Text("plays", fontSize = 7.5.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     Spacer(Modifier.height(4.dp))
                 }
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -789,7 +846,7 @@ private fun StationResultRow(station: DiscoveredStation, onClick: () -> Unit) {
                     )
                 } else {
                     Icon(
-                        if (station.guessedKind() == StationKind.FM_SIMULCAST) Icons.Default.Radio else Icons.Default.MusicNote,
+                        station.guessedKind().icon(),
                         contentDescription = null,
                         tint = Color.White,
                         modifier = Modifier.size(16.dp)
@@ -810,7 +867,7 @@ private fun StationResultRow(station: DiscoveredStation, onClick: () -> Unit) {
                         modifier = Modifier.weight(1f, fill = false)
                     )
                     Spacer(Modifier.width(6.dp))
-                    Pill(if (station.guessedKind() == StationKind.FM_SIMULCAST) "FM" else "Digital")
+                    Pill(station.guessedKind().pillLabel(short = true))
                 }
                 val metaParts = buildList {
                     val quality = station.qualitySummary()
@@ -825,7 +882,7 @@ private fun StationResultRow(station: DiscoveredStation, onClick: () -> Unit) {
                         metaParts.joinToString(" · "),
                         fontSize = 10.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 1,
+                        maxLines = 2,
                         overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
                     )
                 }
@@ -833,22 +890,27 @@ private fun StationResultRow(station: DiscoveredStation, onClick: () -> Unit) {
 
             if (station.clickCount > 0) {
                 Spacer(Modifier.width(8.dp))
-                Column(horizontalAlignment = Alignment.End) {
-                    Text(
-                        formatPlayCount(station.clickCount),
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 11.5.sp,
-                        color = MaterialTheme.colorScheme.primary
-                    )
-                    Text("plays", fontSize = 8.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
+                Icon(
+                    imageVector = Icons.AutoMirrored.Filled.TrendingUp,
+                    contentDescription = "Popular station",
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(16.dp)
+                )
             }
         }
     }
 }
 
-private fun formatPlayCount(count: Int): String =
-    if (count >= 1000) "%.1fk".format(count / 1000f) else count.toString()
+private fun StationKind.pillLabel(short: Boolean = false): String = when (this) {
+    StationKind.FM_SIMULCAST -> if (short) "FM" else "FM simulcast"
+    StationKind.AM_SIMULCAST -> if (short) "AM" else "AM simulcast"
+    StationKind.DIGITAL -> "Digital"
+}
+
+private fun StationKind.icon(): ImageVector = when (this) {
+    StationKind.FM_SIMULCAST, StationKind.AM_SIMULCAST -> Icons.Default.Radio
+    StationKind.DIGITAL -> Icons.Default.MusicNote
+}
 
 @Composable
 private fun ManualAddFields(onAdd: (name: String, url: String, kind: StationKind) -> Unit) {
@@ -866,6 +928,12 @@ private fun ManualAddFields(onAdd: (name: String, url: String, kind: StationKind
                 selected = kind == StationKind.FM_SIMULCAST,
                 onClick = { kind = StationKind.FM_SIMULCAST },
                 label = { Text("FM simulcast") }
+            )
+            Spacer(Modifier.width(8.dp))
+            FilterChip(
+                selected = kind == StationKind.AM_SIMULCAST,
+                onClick = { kind = StationKind.AM_SIMULCAST },
+                label = { Text("AM simulcast") }
             )
             Spacer(Modifier.width(8.dp))
             FilterChip(

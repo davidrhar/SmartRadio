@@ -11,6 +11,7 @@ import kotlinx.serialization.json.Json
 
 private const val PREFS_NAME = "smart_radio_stations"
 private const val STATIONS_KEY = "stations_json"
+private const val LAST_PLAYED_STATION_ID_KEY = "last_played_station_id"
 
 private val json = Json { ignoreUnknownKeys = true }
 
@@ -60,10 +61,14 @@ class StationRepository(context: Context) {
         bitrate: Int = 0,
         language: String = "",
         country: String = "",
+        countryCode: String = "",
         state: String = "",
         clickCount: Int = 0
-    ) {
+    ): Station {
         val current = readStations()
+        // Same stream already shortlisted (e.g. tapping the same search/directory
+        // result twice) — return it as-is instead of adding a duplicate entry.
+        current.firstOrNull { it.streamUrl == streamUrl }?.let { return it }
         val newStation = Station(
             id = java.util.UUID.randomUUID().toString(),
             name = name,
@@ -75,10 +80,12 @@ class StationRepository(context: Context) {
             bitrate = bitrate,
             language = language,
             country = country,
+            countryCode = countryCode,
             state = state,
             clickCount = clickCount
         )
         saveAll(current + newStation)
+        return newStation
     }
 
     suspend fun removeStation(id: String) {
@@ -89,6 +96,13 @@ class StationRepository(context: Context) {
         val byId = readStations().associateBy { it.id }
         val reordered = newOrderIds.mapNotNull { byId[it] }
         saveAll(reordered)
+    }
+
+    /** For Android Auto's media-resumption ("continue where you left off") support. */
+    fun lastPlayedStationId(): String? = prefs.getString(LAST_PLAYED_STATION_ID_KEY, null)
+
+    fun saveLastPlayedStationId(id: String) {
+        prefs.edit().putString(LAST_PLAYED_STATION_ID_KEY, id).apply()
     }
 
     private fun readStations(): List<Station> {

@@ -1,0 +1,10 @@
+.gradle/
+build/
+*/build/
+local.properties
+
+# Fetched by Android Studio or CI on first build — see gradlew's header comment.
+gradle/wrapper/gradle-wrapper.jar
+
+# YAMNet model + labels — downloaded by the downloadYamnetAssets Gradle task at build time.
+app/src/main/assets/
