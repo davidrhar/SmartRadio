@@ -2,18 +2,13 @@
 
 ## Listing
 - **App name:** Skipadoodle
-- **Short description (80):** Streams your favourite stations and skips the ads and talk, automatically.
-- **Full description:**
-  Skipadoodle plays your preferred internet radio stations in the order you choose, and listens to the audio
-  on your phone to tell music from talk. When a station runs into a sustained stretch of ads or chatter, it
-  hops to the next station on your list. If a full lap finds no music it stops instead of burning data.
-  - Search a free community directory of thousands of stations, or add any stream URL.
-  - Set your preference order; the app tries stations top to bottom.
-  - Live track titles where the station provides them.
-  - Works with Android Auto and car Bluetooth controls.
-  - The music-vs-talk check runs entirely on your device. Your audio is never recorded or uploaded.
-  Stations play through each broadcaster's internet stream, so no FM/DAB tuner hardware is needed.
-- **Category:** Music & Audio. **Contact email / website:** set in Console (website: bonufied app page).
+- **Short description (80):** Streams your stations and skips the ads and talk, automatically.
+- **Full description:** the final text was submitted from the upload folder (`full-description.txt`):
+  how it works (directory search, preference order, skips after sustained talk, stops after several
+  empty laps, live track titles), "private by design" (on-device analysis, no account/ads/analytics,
+  optional location only for "Near you"), and "good to know" (internet streams, mobile data, some
+  unencrypted streams). It makes no Android Auto claim until that is verified in a car.
+- **Category:** Music & Audio. **Contact email:** apps@bonufied.com. **Privacy policy:** https://bonufied.com/apps/skipadoodle/privacy/
 - **Graphics:** `art/play-store/icon-512.png`, `art/play-store/feature-graphic-1024x500.png`; phone screenshots
   `art/play-store/screenshot-*.png` (1080x2066, three captured from the R8 release build; Play needs 2+).
 
@@ -36,8 +31,8 @@ continues with the notification controls.
 - **No** accounts, ads, analytics, crash SDKs, or personal identifiers collected by the app.
 - Network requests: station directory (radio-browser.info: search text and optional country code),
   station logos and audio streams from broadcasters' own servers (they see the device IP, as with any player).
-- Data encrypted in transit: **No** for some streams. Many broadcasters only offer http, so the app allows
-  cleartext. Answer honestly.
+- Data encrypted in transit: **Yes**. The only user data sent (search text, optional country code) goes to the
+  directory over https. Some audio streams are plain http, but they carry no user data.
 - Deletion: nothing is sent to a developer server. Station list is local and removed on uninstall.
 
 ## Content rating / other
