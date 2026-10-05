@@ -19,6 +19,10 @@ jobs:
 
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
+        with:
+          # The runner image already ships the SDK. The action's default package list includes
+          # the long-removed "tools" package, which now makes sdkmanager fail the whole job.
+          packages: ''
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v3
