@@ -3,24 +3,20 @@
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
-    <!-- Scaled to 82% about the centre so the pulse line's round caps stay inside the 66dp
-         circle that adaptive-icon masks guarantee to show. -->
+    <!-- Single-colour silhouette for Android 13+ themed icons (the system tints it). -->
     <group
         android:pivotX="54"
         android:pivotY="54"
         android:scaleX="0.82"
         android:scaleY="0.82">
-        <!-- short equalizer bar -->
         <path
-            android:fillColor="#22C3B6"
+            android:fillColor="#FFFFFF"
             android:pathData="M30,54 h9 v24 h-9 z" />
-        <!-- tall equalizer bar -->
         <path
-            android:fillColor="#159C97"
+            android:fillColor="#FFFFFF"
             android:pathData="M45,30 h9 v48 h-9 z" />
-        <!-- audio pulse / skip line, crossing the bars -->
         <path
-            android:strokeColor="#4DE8D4"
+            android:strokeColor="#FFFFFF"
             android:strokeWidth="5"
             android:strokeLineCap="round"
             android:strokeLineJoin="round"

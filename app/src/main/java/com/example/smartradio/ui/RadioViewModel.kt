@@ -266,6 +266,10 @@ class RadioViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch { repository.removeStation(id) }
     }
 
+    fun restoreStation(station: Station, index: Int) {
+        viewModelScope.launch { repository.restoreStation(station, index) }
+    }
+
     fun reorder(newOrderIds: List<String>) {
         viewModelScope.launch { repository.reorder(newOrderIds) }
     }

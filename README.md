@@ -33,7 +33,7 @@ You asked for a cloud build rather than local Android Studio — the easiest zer
 2. The workflow runs automatically on push to `main` (or trigger it manually from the Actions tab → "Build debug APK" → "Run workflow"). The YAMNet assets download automatically as part of the build — no manual step.
 3. When it finishes, open the workflow run → **Artifacts** → download `smart-radio-debug-apk`. That zip contains `app-debug.apk`, installable directly on a phone (enable "install unknown apps" for whatever app you transfer it with).
 
-This produces a **debug**-signed APK, fine for sideloading on your own device. For a Play Store release build you'd add a release keystore and signing config — ask if you want that added.
+This produces a **debug**-signed APK, fine for sideloading on your own device. For a Play Store release build see `docs/release.md`.
 
 ## Tuning the auto-switch behavior
 - `MusicDetectionEngine(sustainedWindowsToSwitch = 8)` in `RadioPlaybackService.kt` — raise/lower this to make switching slower/faster to trigger (each window ≈ 1s).
@@ -41,5 +41,5 @@ This produces a **debug**-signed APK, fine for sideloading on your own device. F
 
 ## Known rough edges / next steps
 - No real starter station list is included (`StationRepository.defaultStations()` returns empty) — add your market's stations via the in-app "+" button, or hardcode some for testing.
-- No release signing config yet.
+- Release signing, R8 and the Play checklist are set up: see `docs/release.md`, `docs/play-store-listing.md`, `docs/privacy-policy.md`.
 - Classifier runs continuously while playing; on very old/low-end devices you may want to throttle inference (e.g. classify every 2nd window instead of every window).

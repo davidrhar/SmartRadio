@@ -92,6 +92,15 @@ class StationRepository(context: Context) {
         saveAll(readStations().filterNot { it.id == id })
     }
 
+    /** Puts a just-removed station back at its old position (the "Undo" on the removal snackbar). */
+    suspend fun restoreStation(station: Station, index: Int) {
+        val current = readStations()
+        if (current.any { it.id == station.id }) return
+        val mutable = current.toMutableList()
+        mutable.add(index.coerceIn(0, mutable.size), station)
+        saveAll(mutable)
+    }
+
     suspend fun reorder(newOrderIds: List<String>) {
         val byId = readStations().associateBy { it.id }
         val reordered = newOrderIds.mapNotNull { byId[it] }

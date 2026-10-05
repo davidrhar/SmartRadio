@@ -63,6 +63,7 @@ import com.example.smartradio.ui.theme.MutedAmber
 import com.example.smartradio.ui.theme.PillBackground
 import com.example.smartradio.ui.theme.PillText
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @UnstableApi
@@ -76,6 +77,8 @@ fun RadioScreen(viewModel: RadioViewModel) {
     val noStationsAvailable by viewModel.noStationsAvailable.collectAsState()
     val autoSkipEvent by viewModel.autoSkipEvent.collectAsState()
     var showAddDialog by remember { mutableStateOf(false) }
+    val snackbarHostState = remember { SnackbarHostState() }
+    val snackbarScope = rememberCoroutineScope()
     var localOrder by remember(stations) { mutableStateOf(stations) }
     val currentStation = stations.find { it.id == currentStationId }
 
@@ -89,22 +92,7 @@ fun RadioScreen(viewModel: RadioViewModel) {
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
-        topBar = {
-            TopAppBar(
-                title = {
-                    Image(
-                        painter = painterResource(R.drawable.skipadoodle_wordmark),
-                        contentDescription = "Skipadoodle",
-                        modifier = Modifier.fillMaxHeight().padding(vertical = 10.dp),
-                        contentScale = ContentScale.Fit,
-                        alignment = Alignment.CenterStart
-                    )
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.background
-                )
-            )
-        },
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         floatingActionButton = {
             FloatingActionButton(
                 onClick = { showAddDialog = true },
@@ -115,6 +103,18 @@ fun RadioScreen(viewModel: RadioViewModel) {
         }
     ) { padding ->
         Column(modifier = Modifier.padding(padding).fillMaxSize()) {
+            // Logo lives in its own header rather than a TopAppBar title: the app bar's 64dp slot
+            // (minus padding) was shrinking the wordmark to ~40dp wide, barely legible.
+            Image(
+                painter = painterResource(R.drawable.skipadoodle_wordmark),
+                contentDescription = "Skipadoodle",
+                modifier = Modifier
+                    .padding(start = 20.dp, top = 12.dp, end = 20.dp, bottom = 4.dp)
+                    .height(60.dp),
+                contentScale = ContentScale.Fit,
+                alignment = Alignment.CenterStart
+            )
+
             AnimatedVisibility(
                 visible = toastEvent != null,
                 enter = slideInVertically(initialOffsetY = { -it }) + fadeIn(),
@@ -123,26 +123,28 @@ fun RadioScreen(viewModel: RadioViewModel) {
                 toastEvent?.let { AutoSkipToast(it) }
             }
 
-            NowPlayingHeader(
-                station = currentStation,
-                isPlaying = isPlaying,
-                noStationsAvailable = noStationsAvailable,
-                playbackError = playbackError,
-                nowPlayingTrack = nowPlayingTrack,
-                onTogglePlay = { viewModel.togglePlayPause() }
-            )
+            if (localOrder.isNotEmpty()) {
+                NowPlayingHeader(
+                    station = currentStation,
+                    isPlaying = isPlaying,
+                    noStationsAvailable = noStationsAvailable,
+                    playbackError = playbackError,
+                    nowPlayingTrack = nowPlayingTrack,
+                    onTogglePlay = { viewModel.togglePlayPause() }
+                )
 
-            Column(modifier = Modifier.padding(horizontal = 20.dp, vertical = 6.dp)) {
-                Text(
-                    text = "Set preference order with the arrows below.",
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    fontSize = 12.sp
-                )
-                Text(
-                    text = "Auto-skips ads/talk.",
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    fontSize = 12.sp
-                )
+                Column(modifier = Modifier.padding(horizontal = 20.dp, vertical = 6.dp)) {
+                    Text(
+                        text = "Set preference order with the arrows below.",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        fontSize = 12.sp
+                    )
+                    Text(
+                        text = "Auto-skips ads/talk.",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        fontSize = 12.sp
+                    )
+                }
             }
 
             if (localOrder.isEmpty()) {
@@ -167,7 +169,20 @@ fun RadioScreen(viewModel: RadioViewModel) {
                             canMoveUp = index > 0,
                             canMoveDown = index < localOrder.size - 1,
                             onClick = { viewModel.selectStation(station.id) },
-                            onRemove = { viewModel.removeStation(station.id) },
+                            onRemove = {
+                                viewModel.removeStation(station.id)
+                                snackbarScope.launch {
+                                    snackbarHostState.currentSnackbarData?.dismiss()
+                                    val result = snackbarHostState.showSnackbar(
+                                        message = "Removed ${station.name}",
+                                        actionLabel = "Undo",
+                                        duration = SnackbarDuration.Short
+                                    )
+                                    if (result == SnackbarResult.ActionPerformed) {
+                                        viewModel.restoreStation(station, index)
+                                    }
+                                }
+                            },
                             onMoveUp = {
                                 localOrder = localOrder.toMutableList().apply {
                                     add(index - 1, removeAt(index))
@@ -274,7 +289,7 @@ private fun AutoSkipToast(event: AutoSkipEvent) {
                 Text(
                     "Switched to ${event.toStationName}",
                     color = Color(0xFFA9AEC2),
-                    fontSize = 9.5.sp
+                    fontSize = 11.sp
                 )
             }
         }
@@ -306,7 +321,7 @@ private fun NowPlayingHeader(
                 )
                 Box(
                     modifier = Modifier
-                        .size(34.dp)
+                        .size(48.dp)
                         .clip(CircleShape)
                         .background(MaterialTheme.colorScheme.primary)
                         .clickable(onClick = onTogglePlay),
@@ -314,9 +329,9 @@ private fun NowPlayingHeader(
                 ) {
                     Icon(
                         if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
-                        contentDescription = "Play/Pause",
+                        contentDescription = if (isPlaying) "Pause" else "Play",
                         tint = Color.White,
-                        modifier = Modifier.size(18.dp)
+                        modifier = Modifier.size(26.dp)
                     )
                 }
             }
@@ -395,11 +410,11 @@ private fun NoStationsBanner() {
         )
         Spacer(Modifier.width(8.dp))
         Column {
-            Text("NO STATIONS AVAILABLE", color = MutedAmber, fontSize = 10.5.sp, fontWeight = FontWeight.Bold)
+            Text("NO STATIONS AVAILABLE", color = MutedAmber, fontSize = 11.sp, fontWeight = FontWeight.Bold)
             Text(
                 "Tried every station three times over — talk, ads, or unreachable. Tap a station below to try again.",
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                fontSize = 9.5.sp
+                fontSize = 11.sp
             )
         }
     }
@@ -451,7 +466,7 @@ private fun Pill(text: String) {
             .background(PillBackground)
             .padding(horizontal = 9.dp, vertical = 3.dp)
     ) {
-        Text(text, color = PillText, fontSize = 10.sp, fontWeight = FontWeight.SemiBold)
+        Text(text, color = PillText, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
     }
 }
 
@@ -542,7 +557,7 @@ private fun StationCard(
                     Text(
                         if (isPlaying) "▶ PLAYING" else "PAUSED",
                         color = accent,
-                        fontSize = 9.5.sp,
+                        fontSize = 11.sp,
                         fontWeight = FontWeight.Bold,
                         modifier = Modifier.padding(top = 2.dp)
                     )
@@ -557,7 +572,7 @@ private fun StationCard(
                 if (metaParts.isNotEmpty()) {
                     Text(
                         metaParts.joinToString(" · "),
-                        fontSize = 10.sp,
+                        fontSize = 11.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         maxLines = 2,
                         overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
@@ -567,7 +582,7 @@ private fun StationCard(
                 if (!nowPlayingTrack.isNullOrBlank()) {
                     Text(
                         "♪ $nowPlayingTrack",
-                        fontSize = 10.sp,
+                        fontSize = 11.sp,
                         fontWeight = FontWeight.SemiBold,
                         color = MaterialTheme.colorScheme.primary,
                         maxLines = 1,
@@ -591,12 +606,12 @@ private fun StationCard(
                 }
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        CircleActionButton(icon = Icons.Default.KeyboardArrowUp, enabled = canMoveUp, filled = true, onClick = onMoveUp)
-                        Spacer(Modifier.height(5.dp))
-                        CircleActionButton(icon = Icons.Default.KeyboardArrowDown, enabled = canMoveDown, filled = true, onClick = onMoveDown)
+                        CircleActionButton(icon = Icons.Default.KeyboardArrowUp, description = "Move up", enabled = canMoveUp, filled = true, onClick = onMoveUp)
+                        Spacer(Modifier.height(6.dp))
+                        CircleActionButton(icon = Icons.Default.KeyboardArrowDown, description = "Move down", enabled = canMoveDown, filled = true, onClick = onMoveDown)
                     }
                     Spacer(Modifier.width(6.dp))
-                    CircleActionButton(icon = Icons.Default.Close, enabled = true, filled = false, onClick = onRemove)
+                    CircleActionButton(icon = Icons.Default.Close, description = "Remove station", enabled = true, filled = false, onClick = onRemove)
                 }
             }
         }
@@ -606,6 +621,7 @@ private fun StationCard(
 @Composable
 private fun CircleActionButton(
     icon: ImageVector,
+    description: String,
     enabled: Boolean,
     filled: Boolean,
     onClick: () -> Unit
@@ -619,13 +635,13 @@ private fun CircleActionButton(
 
     Box(
         modifier = Modifier
-            .size(28.dp)
+            .size(34.dp)
             .clip(CircleShape)
             .background(background)
             .then(if (enabled) Modifier.clickable(onClick = onClick) else Modifier),
         contentAlignment = Alignment.Center
     ) {
-        Icon(icon, contentDescription = null, tint = tint, modifier = Modifier.size(16.dp))
+        Icon(icon, contentDescription = description, tint = tint, modifier = Modifier.size(18.dp))
     }
 }
 
@@ -818,7 +834,7 @@ private fun NearYouChip(
             Icon(Icons.Default.LocationOn, contentDescription = null, tint = contentColor, modifier = Modifier.size(12.dp))
         }
         Spacer(Modifier.width(4.dp))
-        Text(resolvedCountry ?: "Near you", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = contentColor)
+        Text(resolvedCountry ?: "Near you", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = contentColor)
     }
 }
 
@@ -880,7 +896,7 @@ private fun StationResultRow(station: DiscoveredStation, onClick: () -> Unit) {
                     Spacer(Modifier.height(3.dp))
                     Text(
                         metaParts.joinToString(" · "),
-                        fontSize = 10.sp,
+                        fontSize = 11.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         maxLines = 2,
                         overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis

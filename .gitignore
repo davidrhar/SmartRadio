@@ -8,3 +8,8 @@ gradle/wrapper/gradle-wrapper.jar
 
 # YAMNet model + labels — downloaded by the downloadYamnetAssets Gradle task at build time.
 app/src/main/assets/
+
+# Release signing: the passwords and the keystore itself must never be committed.
+keystore.properties
+*.jks
+*.keystore

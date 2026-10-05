@@ -1,4 +1,6 @@
 import java.net.URL
+import java.util.Properties
+import java.util.concurrent.TimeUnit
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 plugins {
@@ -8,22 +10,95 @@ plugins {
     id("org.jetbrains.kotlin.plugin.serialization")
 }
 
+/*
+ * Release signing. The upload key lives outside the repository (see keystore.properties.template and
+ * docs/release.md). The password is read from the macOS keychain first, keystore.properties second.
+ * With neither present the release build still assembles, UNSIGNED, so a fresh clone or CI can
+ * always compile without the private key. Nothing here ever prints a secret.
+ */
+val keystorePropsFile = rootProject.file("keystore.properties")
+val keystoreProps = Properties().apply {
+    if (keystorePropsFile.exists()) keystorePropsFile.inputStream().use { load(it) }
+}
+
+fun keychainPassword(service: String): String? = runCatching {
+    if (!System.getProperty("os.name").startsWith("Mac")) return@runCatching null
+    val proc = ProcessBuilder("security", "find-generic-password", "-s", service, "-w").start()
+    if (!proc.waitFor(15, TimeUnit.SECONDS)) { proc.destroyForcibly(); return@runCatching null }
+    if (proc.exitValue() != 0) return@runCatching null
+    proc.inputStream.bufferedReader().readText().trim().takeIf { it.isNotEmpty() }
+}.getOrNull()
+
+val releaseKeystore = keystoreProps.getProperty("storeFile")
+    ?.takeIf { it.isNotBlank() }
+    ?.let { rootProject.file(it) }
+    ?.takeIf { it.exists() }
+val keychainService = keystoreProps.getProperty("keychainService")
+    ?.takeIf { it.isNotBlank() } ?: "skipadoodle-release"
+val keychainStorePassword = keychainPassword(keychainService)
+val fileStorePassword = keystoreProps.getProperty("storePassword")?.takeIf { it.isNotBlank() }
+val fileKeyPassword = keystoreProps.getProperty("keyPassword")?.takeIf { it.isNotBlank() }
+// Both passwords from ONE source, never a mixture (a mismatch fails inside keytool with a
+// misleading "Get Key failed" error). A PKCS12 keystore uses a single password for both.
+val resolvedStorePassword = keychainStorePassword ?: fileStorePassword
+val resolvedKeyPassword = if (keychainStorePassword != null) keychainStorePassword
+    else (fileKeyPassword ?: fileStorePassword)
+val passwordSource = when {
+    keychainStorePassword != null -> "macOS keychain (service \"$keychainService\")"
+    fileStorePassword != null -> "keystore.properties (plaintext on disk)"
+    else -> "none found"
+}
+
+tasks.register("signingStatus") {
+    group = "help"
+    description = "Report how release signing resolves, without printing any secret."
+    doLast {
+        println("keystore file    : " + (releaseKeystore?.absolutePath ?: "not configured"))
+        println("key alias        : " + (keystoreProps.getProperty("keyAlias") ?: "not set"))
+        println("password source  : $passwordSource")
+        println("release signing  : " +
+            if (releaseKeystore != null && resolvedStorePassword != null) "CONFIGURED"
+            else "NOT configured - release builds will be unsigned")
+    }
+}
+
 android {
+    // The code's package stays com.example.smartradio (renaming ~2000 lines of packages buys
+    // nothing); only the applicationId, which is what Play and devices see, had to change:
+    // Play rejects any applicationId that starts with com.example.
     namespace = "com.example.smartradio"
     compileSdk = 36
 
     defaultConfig {
-        applicationId = "com.example.smartradio"
+        applicationId = "com.skipadoodle"
         minSdk = 26
         targetSdk = 36
-        versionCode = 1
-        versionName = "0.1.0"
+        versionCode = 2
+        versionName = "0.2.0"
+    }
+
+    signingConfigs {
+        if (releaseKeystore != null && resolvedStorePassword != null) {
+            create("release") {
+                storeFile = releaseKeystore
+                storePassword = resolvedStorePassword
+                keyAlias = keystoreProps.getProperty("keyAlias")
+                keyPassword = resolvedKeyPassword
+            }
+        }
     }
 
     buildTypes {
         release {
-            isMinifyEnabled = false
+            // R8 on (Play asks for DEX obfuscation/optimisation), resource shrinking off: the
+            // resource-shrinking win here is tiny and it is a second way for something to vanish
+            // silently. See app/proguard-rules.pro.
+            isMinifyEnabled = true
+            isShrinkResources = false
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+            // Null when no keystore is configured -> unsigned APK/AAB, never a silent fallback
+            // to the debug key.
+            signingConfig = signingConfigs.findByName("release")
         }
     }
 
@@ -108,6 +183,9 @@ dependencies {
     implementation("androidx.core:core-ktx:1.13.1")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.4")
     implementation("androidx.activity:activity-compose:1.9.1")
+    // Not used directly: a transitive dependency drags in fragment 1.1.0, which release lint
+    // rejects (InvalidFragmentVersionForActivityResult). Pin a current version.
+    implementation("androidx.fragment:fragment:1.8.5")
 
     val composeBom = platform("androidx.compose:compose-bom:2026.06.00")
     implementation(composeBom)
