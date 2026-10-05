@@ -44,3 +44,11 @@ Bump `versionCode` by one for every build handed to anyone, in the same commit.
 Install from Play, not a sideloaded APK. Android Auto hides sideloaded media apps unless
 *Android Auto, Settings, tap Version 10 times, Developer settings, Unknown sources* is on. For Auto to list
 the app, the Play listing must also pass Google's Android Auto review (media app category).
+
+## Upload certificate
+
+Every build uploaded to Play must be signed with this key. If a later build shows a different
+fingerprint, something is wrong.
+
+Certificate SHA-256: `52:58:D6:7A:0C:DF:84:4A:09:80:D9:B8:C7:E7:E8:DA:80:C8:2E:65:75:51:14:C3:C7:04:F1:F1:79:48:E5:61`
+(RSA 4096, alias `skipadoodle`, first signed bundle versionCode 2, 2026-10-05)
