@@ -112,7 +112,22 @@ class RadioPlaybackService : MediaLibraryService() {
             }
         }
 
-        player = ExoPlayer.Builder(this, renderersFactory).build()
+        // handleAudioFocus = true is what makes Android Auto route our audio to the
+        // car: the head unit only switches to the phone's media channel when an app
+        // holds media audio focus. Without it Auto shows "playing" but stays silent
+        // (the phone speaker plays unfocused audio regardless, hiding the problem).
+        // Focus also gives us pause-on-call and ducking under navigation prompts;
+        // ducking is applied at the AudioTrack, after the classifier tap.
+        player = ExoPlayer.Builder(this, renderersFactory)
+            .setAudioAttributes(
+                androidx.media3.common.AudioAttributes.Builder()
+                    .setUsage(androidx.media3.common.C.USAGE_MEDIA)
+                    .setContentType(androidx.media3.common.C.AUDIO_CONTENT_TYPE_MUSIC)
+                    .build(),
+                /* handleAudioFocus = */ true
+            )
+            .setHandleAudioBecomingNoisy(true)
+            .build()
         player.addListener(object : androidx.media3.common.Player.Listener {
             // Raw ICY Metadata events (Player.Listener.onMetadata) never cross the
             // MediaSession -> MediaController IPC boundary in media3 — only synced
